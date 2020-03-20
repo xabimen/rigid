@@ -2,12 +2,13 @@ module mod_check_min
 
 contains
 
-subroutine check_min ( mat, min_index )
+subroutine check_min ( mat, i_init, min_index )
     implicit none
     real*8, intent(in)   :: mat(:)
+    integer, intent(in)  :: i_init
     integer, intent(out) :: min_index
     real*8               :: mat_smooth(size(mat))
-    integer              :: i, j, i_init, N, N_smooth, N_check
+    integer              :: i, j, N, N_smooth, N_check
     real*8               :: u, f_min
     logical              :: minimum
 
@@ -29,14 +30,14 @@ subroutine check_min ( mat, min_index )
     enddo
 
     !Find minimum
-    f_min = -huge(1.0)
-    do i_init = 1, N
-        if ( mat_smooth(i_init) > 0.2 ) then
-            f_min = mat_smooth(i_init)
-            min_index = i_init
-            exit
-        endif
-    enddo
+    ! f_min = -huge(1.0)
+    ! do i_init = 1, N
+    !     if ( mat_smooth(i_init) > 0.2 ) then
+    !         f_min = mat_smooth(i_init)
+    !         min_index = i_init
+    !         exit
+    !     endif
+    ! enddo
 
     do i = i_init, N
 

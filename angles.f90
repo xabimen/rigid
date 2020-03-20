@@ -36,9 +36,9 @@ end subroutine get_neighbor_list
 
 
 subroutine compute_angle_distr(dist_matrix, dist_atoms, neighbor_list, N_neighbor, &
-                               atomtype, type1, type2, bins, angle_distr)
+                               atomtype, type1, type2, bins, rcut, angle_distr)
     implicit none
-    real*8, intent(in)  :: dist_matrix(:,:)
+    real*8, intent(in)  :: dist_matrix(:,:), rcut
     integer, intent(in) :: dist_atoms(:,:), neighbor_list(:,:), N_neighbor(:), &
                            atomtype(:), type1, type2, bins
     real*8, intent(out) :: angle_distr(bins)
@@ -61,12 +61,14 @@ subroutine compute_angle_distr(dist_matrix, dist_atoms, neighbor_list, N_neighbo
             do j = 1, N_neighbor(i)
                 ind = neighbor_list(i,j)
                 rj = dist_matrix(ind,:)
-                if ( atomtype(dist_atoms(ind,2)) == type2 ) then
+                if ( norm2(rj) <= rcut .and. &
+                     atomtype(dist_atoms(ind,2)) == type2 ) then
                     do k = j+1, N_neighbor(i)
                         ind = neighbor_list(i,k)
                         rk = dist_matrix(ind,:)
 
-                        if ( atomtype(dist_atoms(ind,2)) == type2 ) then
+                        if ( norm2(rk) <= rcut .and. &
+                             atomtype(dist_atoms(ind,2)) == type2 ) then
 
                             theta =  ( sum(rj*rk) / (norm2(rj)*norm2(rk)) )
                             if (abs(theta) + 1.0D-8 < 1.0d0) then
