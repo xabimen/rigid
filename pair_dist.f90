@@ -1,25 +1,34 @@
 module pair_dist
 
+use mod_angles
+
 
 contains
 !************************************
-subroutine pair_distribution(cell,coor,numIons,atomtype,type1,type2,rmax,bins,pdf)
+subroutine pair_distribution(cell,coor,numIons,atomtype,type1,type2,rmax,bins,pdf,angle_distr)
 implicit NONE
 real*8, dimension(:,:), intent(in)                 :: cell, coor
 integer, dimension(:), intent(in)                  :: atomtype, numIons
 real*8, intent(in)                                 :: Rmax
 integer, intent(in)                                :: bins, type1, type2
-real*8, dimension(:), allocatable, intent(out)     :: pdf
+real*8, dimension(:), allocatable, intent(out)     :: pdf, angle_distr
 integer, dimension(:), allocatable                 :: N
 integer, dimension(:,:), allocatable               :: dist_atoms
 real*8                                             :: V
 real*8, dimension(:,:), allocatable                :: dist_matrix
-INTEGER                                            :: i
 
-allocate(pdf(bins))
+integer, allocatable :: neighbor_list(:,:)
+integer              :: N_neighbor(size(atomtype))
+
+allocate(pdf(bins), angle_distr(bins))
 
 call makeMatrices(cell,coor,numIons,atomType,Rmax,N,V,dist_matrix,dist_atoms)
 call compute_gdr(dist_matrix,dist_atoms,atomType,type1,type2,numIons(type1)*numIons(type2),V,bins,rmax,pdf)
+
+call get_neighbor_list( dist_matrix, dist_atoms, size(atomtype), &
+                        N_neighbor, neighbor_list )
+call compute_angle_distr( dist_matrix, dist_atoms, neighbor_list, N_neighbor, &
+                          atomtype, type1, type2, bins, angle_distr)
 
 
 end subroutine
