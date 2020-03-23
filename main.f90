@@ -24,21 +24,33 @@ real*8, dimension(:,:), allocatable  :: dist_matrix
 integer, allocatable                 :: neighbor_list(:,:), N_neighbor(:)
 real*8, allocatable                  :: mat_rcut(:,:), mat_theta(:,:,:)
 
-rmax = 8.0
-bins = 100
+character(len=2), allocatable :: species(:)
+
+rmax = 7.0
+bins = 1000
 type1 = 3
 type2 = 3
 
-call atom_number("input",natoms)
-allocate(coor(natoms,3),atomtype(natoms), N_neighbor(natoms),&
-         pdf(bins), angle_distr(bins))
+!*****************************************************************
+!call atom_number("input",natoms)
+!allocate(coor(natoms,3),atomtype(natoms), N_neighbor(natoms),&
+!         pdf(bins), angle_distr(bins))
+
+!open(unit=123,file="input",status='old',action='read')
+!open(unit=124,file="kaka_POSCAR",status='replace',action='write')
+
+!call read_trj(123,cell,coor,numIons,atomtype,io)
+!call write_vasp(124,cell,coor)
+!*****************************************************************
 
 
-open(unit=123,file="input",status='old',action='read')
-open(unit=124,file="kaka_POSCAR",status='replace',action='write')
+!*****************************************************************
+allocate(species(2))
+species = (/ "Si", "O " /)
+call read_xsf("struc1.xsf", species, natoms, cell, coor, numions, atomtype, io)
+allocate(N_neighbor(natoms), pdf(bins), angle_distr(bins))
+!*****************************************************************
 
-call read_trj(123,cell,coor,numIons,atomtype,io)
-call write_vasp(124,cell,coor)
 
 N_species = size(numIons)
 allocate(mat_rcut(N_species,N_species), mat_theta(N_species,N_species,2))
@@ -81,21 +93,21 @@ enddo
 
 
 ! type1 = 1
-! type2 = 3
+! type2 = 2
 ! call compute_gdr(dist_matrix,dist_atoms,atomType,type1,type2,numIons(type1)*numIons(type2),V,bins,rmax,pdf)
 ! call compute_angle_distr( dist_matrix, dist_atoms, neighbor_list, N_neighbor, &
 !                 atomtype, type1, type2, bins, mat_rcut(type1,type2), angle_distr)
 
 ! print*, "# Minimum: ", rmax/bins*min_pdf
-! do i = 1, bins
-!    print*, rmax/real(bins)*i, pdf(i)
-! enddo
+! !do i = 1, bins
+! !   print*, rmax/real(bins)*i, pdf(i)
+! !enddo
 
-! ! do i = 1, bins
-! !     if (angle_distr(i) > 1.0D-8) then
-! !         print*, pi/bins*i, angle_distr(i)
-! ! 	endif
-! ! enddo
+! do i = 1, bins
+!     if (angle_distr(i) > 1.0D-8) then
+!         print*, pi/bins*i, angle_distr(i)
+! 	endif
+! enddo
 
 
 

@@ -153,4 +153,88 @@ enddo
 
 end subroutine
 !*********************************************
+!*********************************************
+subroutine read_xsf(filename, species, natoms, cell, coor, numions, atomtype, io)
+implicit none
+character(len=*), intent(in)      :: filename
+character(len=2), intent(in)      :: species(:)
+real*8, intent(out)               :: cell(:,:)
+real*8, allocatable, intent(out)  :: coor(:,:)
+integer, allocatable, intent(out) :: numions(:), atomtype(:)
+integer, intent(out)              :: natoms, io
+integer                           :: nspecies, i, ind
+real*8                            :: cartesian(3), fractional(3), inv_cell(3,3)
+character(len=2)                  :: at_type
+
+open(unit = 1, action = "read", status = "old", file = filename)
+
+do i = 1, 5
+    read(1,*)
+enddo
+
+do i = 1, 3
+    read(1,*) cell(i,:)
+enddo
+call M33INV(cell, inv_cell)
+
+read(1,*)
+read(1,*) natoms
+
+nspecies = size(species)
+allocate( coor(natoms,3), atomtype(natoms), numions(nspecies) )
+numions = 0
+
+do i = 1, natoms
+    read(1,*) at_type, cartesian(:)
+    fractional = matmul(cartesian, inv_cell)
+    coor(i,:)  = fractional(:)
+    do ind = 1, nspecies
+        if ( trim(adjustl(at_type)) == trim(adjustl(species(ind))) ) then
+            atomtype(i) = ind
+            numions(ind) = numions(ind) + 1
+            exit
+        endif
+    enddo
+enddo
+
+
+close(unit = 1)
+
+end subroutine read_xsf
+!*********************************************
+!*********************************************
+
+SUBROUTINE M33INV (A, AINV)
+
+IMPLICIT NONE
+
+real*8, DIMENSION(3,3), INTENT(IN)  :: A
+real*8, DIMENSION(3,3), INTENT(OUT) :: AINV
+
+real*8, PARAMETER :: EPS = 1.0D-10
+real*8 :: DET
+real*8, DIMENSION(3,3) :: COFACTOR
+
+
+DET =   A(1,1)*A(2,2)*A(3,3)  &
+    - A(1,1)*A(2,3)*A(3,2)  &
+    - A(1,2)*A(2,1)*A(3,3)  &
+    + A(1,2)*A(2,3)*A(3,1)  &
+    + A(1,3)*A(2,1)*A(3,2)  &
+    - A(1,3)*A(2,2)*A(3,1)
+
+COFACTOR(1,1) = +(A(2,2)*A(3,3)-A(2,3)*A(3,2))
+COFACTOR(1,2) = -(A(2,1)*A(3,3)-A(2,3)*A(3,1))
+COFACTOR(1,3) = +(A(2,1)*A(3,2)-A(2,2)*A(3,1))
+COFACTOR(2,1) = -(A(1,2)*A(3,3)-A(1,3)*A(3,2))
+COFACTOR(2,2) = +(A(1,1)*A(3,3)-A(1,3)*A(3,1))
+COFACTOR(2,3) = -(A(1,1)*A(3,2)-A(1,2)*A(3,1))
+COFACTOR(3,1) = +(A(1,2)*A(2,3)-A(1,3)*A(2,2))
+COFACTOR(3,2) = -(A(1,1)*A(2,3)-A(1,3)*A(2,1))
+COFACTOR(3,3) = +(A(1,1)*A(2,2)-A(1,2)*A(2,1))
+
+AINV = TRANSPOSE(COFACTOR) / DET
+
+END SUBROUTINE M33INV
+!*********************************************
 end module
