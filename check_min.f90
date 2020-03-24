@@ -8,13 +8,14 @@ implicit none
 real*8, dimension(:), intent(in)            :: pdf
 integer, intent(in)                         :: min_index
 real*8, intent(in)                          :: dx, norm
-real*8                                      :: ans
+real*8                                      :: ans, pi
 integer                                     :: i
 
+pi = acos(-1.0d0)
 ans= 0.0
 
 do i = 2, min_index
-    ans = ans + dx*((pdf(i)+pdf(i-1))/2.0d0)*(4.0*3.1416*(dx*i)**2)*norm
+    ans = ans + dx*((pdf(i)+pdf(i-1))/2.0d0)*(4.0*pi*(dx*(i-0.5d0))**2)*norm
 enddo   
 end function
 

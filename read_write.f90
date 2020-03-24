@@ -237,4 +237,42 @@ AINV = TRANSPOSE(COFACTOR) / DET
 
 END SUBROUTINE M33INV
 !*********************************************
+!*********************************************
+subroutine write_gdr( filename, gdr, rmax )
+    implicit none
+    character(*), intent(in) :: filename
+    real*8, intent(in)       :: gdr(:), rmax
+    integer                  :: i, N
+    real*8                   :: dr
+
+    N = size(gdr)
+    dr = rmax/N
+
+    open(unit = 1, status = "replace", action = "write", file = filename)
+    do i = 1, N
+        write(1,"(2f12.6)") dr*(i-0.5), gdr(i)
+    enddo
+    close(unit = 1)
+
+end subroutine write_gdr
+!*********************************************
+!*********************************************
+subroutine write_angle_distr( filename, angle_distr )
+    implicit none
+    character(*), intent(in) :: filename
+    real*8, intent(in)       :: angle_distr(:)
+    integer                  :: i, N
+    real*8                   :: dtheta
+
+    N = size(angle_distr)
+    dtheta = acos(-1.0d0)/N
+
+    open(unit = 1, status = "replace", action = "write", file = filename)
+    do i = 1, N
+        write(1,"(2f12.6)") dtheta*(i-0.5), angle_distr(i)
+    enddo
+    close(unit = 1)
+
+end subroutine write_angle_distr
+!*********************************************
 end module
