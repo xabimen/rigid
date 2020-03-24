@@ -2,6 +2,7 @@ module mod_check_min
 
 contains
 
+
 function integrate(pdf,min_index,norm,dx) result(ans)
 implicit none
 real*8, dimension(:), intent(in)            :: pdf
@@ -16,6 +17,7 @@ do i = 2, min_index
     ans = ans + dx*((pdf(i)+pdf(i-1))/2.0d0)*(4.0*3.1416*(dx*i)**2)*norm
 enddo   
 end function
+
 
 subroutine check_min ( mat, i_init, min_index )
     implicit none
@@ -41,8 +43,10 @@ subroutine check_min ( mat, i_init, min_index )
         else
             u = sum( mat(i-N_smooth:i+N_smooth) )/(2*N_smooth+1)
         endif
-        mat_smooth(i) = u
+        mat_smooth(i) = max(u, 1.0d-14)
     enddo
+
+    !mat_smooth = mat
 
     !Find minimum
     ! f_min = -huge(1.0)
@@ -57,17 +61,27 @@ subroutine check_min ( mat, i_init, min_index )
     do i = i_init, N
 
         minimum = .True.
-        do j = max(1, i-N_check), min(N, i+N_check)
+        do j = max(1, i-N_check), i-1!min(N, i+N_check)
             if (i == j) then
                 continue
             endif
-
-            if ( mat_smooth(j) < mat_smooth(i) ) then
+            if ( mat_smooth(j) <= mat_smooth(i) ) then
                 minimum = .false.
                 exit
             endif
-
         enddo
+
+        if (minimum) then
+            do j = i+1, min(N, i+N_check)
+                if (i == j) then
+                    continue
+                endif
+                if ( mat_smooth(j) < mat_smooth(i) ) then
+                    minimum = .false.
+                    exit
+                endif
+            enddo
+        endif
 
         if (minimum) then
             min_index = i

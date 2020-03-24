@@ -94,14 +94,14 @@ enddo
 
 ! type1 = 1
 ! type2 = 2
-! call compute_gdr(dist_matrix,dist_atoms,atomType,type1,type2,numIons(type1)*numIons(type2),V,bins,rmax,pdf)
+! call compute_gdr(dist_matrix,dist_atoms,atomType,type1,type2,numIons,V,bins,rmax,pdf)
 ! call compute_angle_distr( dist_matrix, dist_atoms, neighbor_list, N_neighbor, &
 !                 atomtype, type1, type2, bins, mat_rcut(type1,type2), angle_distr)
 
-! print*, "# Minimum: ", rmax/bins*min_pdf
-! !do i = 1, bins
-! !   print*, rmax/real(bins)*i, pdf(i)
-! !enddo
+! print*, "# Minimum: ", mat_rcut(type1,type2)
+! do i = 1, bins
+!    print*, rmax/real(bins)*i, pdf(i)
+! enddo
 
 ! do i = 1, bins
 !     if (angle_distr(i) > 1.0D-8) then
