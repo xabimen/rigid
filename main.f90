@@ -65,7 +65,7 @@ do type1 = 1, N_species
     do type2 = type1, N_species
 
         ! Compute radial distribution function
-        call compute_gdr(dist_matrix,dist_atoms,atomType,type1,type2,numIons(type1)*numIons(type2),V,bins,rmax,pdf)
+        call compute_gdr(dist_matrix,dist_atoms,atomType,type1,type2,numIons,V,bins,rmax,pdf)
         
         ! Find the first minimum
         call check_min(pdf, int(bins*0.5/rmax), min_pdf)
@@ -86,7 +86,7 @@ do type1 = 1, N_species
         !call compute_angle_distr( dist_matrix, dist_atoms, neighbor_list, N_neighbor, &
         !                          atomtype, type2, type1, bins, rmax/bins*min_pdf, angle_distr)
 
-        print*, type1, type2, mat_rcut(type1,type2)
+        print*, type1, type2, mat_rcut(type1,type2), integrate(pdf,min_pdf,numIons(type2)/V,rmax/real(bins)) 
 
     enddo
 enddo

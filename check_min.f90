@@ -2,6 +2,21 @@ module mod_check_min
 
 contains
 
+function integrate(pdf,min_index,norm,dx) result(ans)
+implicit none
+real*8, dimension(:), intent(in)            :: pdf
+integer, intent(in)                         :: min_index
+real*8, intent(in)                          :: dx, norm
+real*8                                      :: ans
+integer                                     :: i
+
+ans= 0.0
+
+do i = 2, min_index
+    ans = ans + dx*((pdf(i)+pdf(i-1))/2.0d0)*(4.0*3.1416*(dx*i)**2)*norm
+enddo   
+end function
+
 subroutine check_min ( mat, i_init, min_index )
     implicit none
     real*8, intent(in)   :: mat(:)

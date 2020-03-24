@@ -3,12 +3,12 @@ module pair_dist
 contains
 !************************************
 !************************************
-subroutine compute_gdr(dist_matrix,dist_atoms,atomType,type1,type2,norm,V,bins,rcut,gdr2)
+subroutine compute_gdr(dist_matrix,dist_atoms,atomType,type1,type2,numIons,V,bins,rcut,gdr2)
 implicit none
 real*8, dimension(:,:), intent(in)      :: dist_matrix
 integer, dimension(:,:), intent(in)     :: dist_atoms
-integer, dimension(:), intent(in)       :: atomType
-integer, intent(in)                     :: bins, type1, type2, norm
+integer, dimension(:), intent(in)       :: atomType, numIons
+integer, intent(in)                     :: bins, type1, type2
 real*8, intent(in)                      :: rcut, V
 real*8, dimension(bins), intent(out)    :: gdr2
 real*8, dimension(bins)                 :: gdr
@@ -18,7 +18,7 @@ integer                                 :: len
 real*8                                  :: x, c
 
 
-c=0.2d0
+c=0.05d0
 gdr=0.0d0
 len = size(dist_matrix,1)
 k=0
@@ -37,13 +37,15 @@ enddo
 
 
 
-do i = 1, bins
-    if (i==1) then
-        gdr2(i) = gdr(i)*rcut/real(bins,8)/(4.0*3.1416*((rcut/real(bins,8))**3*(i**3-(i-1)**3))/3.0d0)*V/(real(4)**2)
-    else
+gdr(:)=gdr(:)/real(numIons(type1),8)
+gdr2=0.0
+do i = 2, bins
+    !if (i==1) then
+        !gdr2(i) = gdr(i)*rcut/real(bins,8)/(4.0*3.1416*((rcut/real(bins,8))**3*(i**3-(i-1)**3))/3.0d0)*V/(norm)
+    !else
         gdr2(i) = ((gdr(i)+gdr(i-1))/2.0d0)*(rcut/real(bins,8))/ &
-        (4.0*3.1416*((rcut/real(bins,8))**3*(i**3-(i-1)**3))/3.0d0)*V/(real(4)**2)
-    endif
+        (4.0*3.1416*((rcut/real(bins,8))**3*(i**3-(i-1)**3))/3.0d0)*V/(numIons(type2))
+    !endif
 enddo
 
 end subroutine
