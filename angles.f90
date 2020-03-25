@@ -10,8 +10,8 @@ subroutine get_neighbor_list( dist_matrix, dist_atoms, N_atoms, &
                               N_neighbor, neighbor_list )
     implicit none
     integer, intent(in)  :: N_atoms
-    real*8, intent(in)   :: dist_matrix(:,:)
-    integer, intent(in)  :: dist_atoms(:,:)
+    real*8,allocatable, intent(in)   :: dist_matrix(:,:)
+    integer, allocatable, intent(in)  :: dist_atoms(:,:)
     integer, intent(out) :: N_neighbor(N_atoms)
     integer, allocatable, intent(out) :: neighbor_list(:,:)
     integer :: aux_list(N_atoms, size(dist_matrix,1))
@@ -124,7 +124,11 @@ subroutine compute_angle_distr(dist_matrix, dist_atoms, neighbor_list, N_neighbo
         endif
     enddo
 
-    angle_distr = angle_distr/(dtheta*cont)
+    do i = 1, bins
+        if (angle_distr(i) > 0.0d0) then
+            angle_distr(i) = angle_distr(i)/(dtheta*cont)
+        endif
+    enddo
 
 end subroutine compute_angle_distr
 

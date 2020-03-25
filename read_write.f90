@@ -202,6 +202,23 @@ close(unit = 1)
 
 end subroutine read_xsf
 !*********************************************
+subroutine read_natoms_xsf(filename, natoms, io)
+implicit none
+character(len=*), intent(in)      :: filename
+integer, intent(out)              :: natoms, io
+integer :: i
+
+open(unit = 1, action = "read", status = "old", file = filename)
+
+do i = 1, 9
+    read(1,*)
+enddo
+read(1,*) natoms
+
+close(unit = 1)
+
+end subroutine read_natoms_xsf
+!*********************************************
 !*********************************************
 
 SUBROUTINE M33INV (A, AINV)
@@ -274,5 +291,39 @@ subroutine write_angle_distr( filename, angle_distr )
     close(unit = 1)
 
 end subroutine write_angle_distr
+!*********************************************
+!*********************************************
+subroutine get_all_files (directory, N_file, file_list)
+    character(*), intent(in)               :: directory
+    character(*), allocatable, intent(out) :: file_list(:)
+    integer, intent(out)                   :: N_file
+    character(100) :: aux
+    integer        :: i, io
+
+    call system( "ls "//directory//" > traj_files.dat" )
+
+    open(unit=1, action="read", status="old", file="traj_files.dat")
+    N_file = 0
+    do
+        read(1,*,iostat=io)
+        if (io/=0) then
+            exit
+        endif
+        N_file = N_file + 1
+    enddo
+
+    rewind(1)
+
+    allocate(file_list(N_file))
+
+    do i = 1, N_file
+        read(1,"(a)") aux
+        aux = directory//"/"//trim(adjustl(aux))
+        file_list(i) = aux
+    enddo
+
+    close(unit = 1)
+
+end subroutine get_all_files
 !*********************************************
 end module
