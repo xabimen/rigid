@@ -282,7 +282,7 @@ subroutine write_angle_distr( filename, angle_distr )
     real*8                   :: dtheta
 
     N = size(angle_distr)
-    dtheta = acos(-1.0d0)/N
+    dtheta = 180.0/N
 
     open(unit = 1, status = "replace", action = "write", file = filename)
     do i = 1, N
@@ -291,6 +291,26 @@ subroutine write_angle_distr( filename, angle_distr )
     close(unit = 1)
 
 end subroutine write_angle_distr
+!*********************************************
+!*********************************************
+subroutine write_angle_distr_full( filename, N_pair, angle_distr )
+    implicit none
+    character(*), intent(in) :: filename
+    integer, intent(in)      :: N_pair
+    real*8, intent(in)       :: angle_distr(:,:)
+    integer                  :: i, N
+    real*8                   :: dtheta
+
+    N = size(angle_distr,2)
+    dtheta = 180.0/N
+
+    open(unit = 1, status = "replace", action = "write", file = filename)
+    do i = 1, N
+        write(1,"(100f12.6)") dtheta*(i-0.5), angle_distr(:N_pair,i)
+    enddo
+    close(unit = 1)
+
+end subroutine write_angle_distr_full
 !*********************************************
 !*********************************************
 subroutine get_all_files (directory, N_file, file_list)
