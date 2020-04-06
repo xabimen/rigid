@@ -21,10 +21,10 @@ integer                                 :: N_species, min_pdf, N_file, ifile, ma
 integer, dimension(:), allocatable   :: N
 integer, dimension(:,:), allocatable :: dist_atoms
 real*8, dimension(:,:), allocatable  :: dist_matrix
-integer, allocatable                 :: neighbor_list(:,:,:,:), N_neighbor(:,:), mat_neighbor(:,:), &
+integer, allocatable                 :: neighbor_list(:,:,:,:), N_neighbor(:,:), &
                                         neighbor_order_list(:,:,:)
 real*8, allocatable                  :: mat_rcut(:,:), mat_theta(:,:,:), mat_pdf(:,:,:), mat_adf(:,:,:,:), &
-                                        mean(:,:,:), sigma(:,:,:)
+                                        mean(:,:,:), sigma(:,:,:), mat_neighbor(:,:)
 
 character(len=2), allocatable   :: species(:)
 character(len=100), allocatable :: file_list(:)
@@ -49,7 +49,6 @@ mat_pdf = 0.0d0
 
 
 
-
 ! 1. READ TRAJECTORY AND COMPUTE RADIAL DISTRIBUTION FUNCTIONS 
 ! ------------------------------------------------------------
 call atom_number(infile,natoms)
@@ -61,7 +60,6 @@ print*, numIons(:)
 open(unit=124,file="kaka_POSCAR",status='replace',action='write')
 call write_vasp(124,cell,coor)
 
-stop
 
 N_file = 0
 do
@@ -83,15 +81,23 @@ do
             ! Compute radial distribution function
             call compute_gdr(dist_matrix,dist_atoms,atomType,type1,type2,numIons,V,bins,rmax,pdf)
             
-            mat_pdf(type1,type2,:) = mat_pdf(type1,type2,:) + pdf(:)/N_file
+            mat_pdf(type1,type2,:) = mat_pdf(type1,type2,:) + pdf(:)
         enddo
     enddo
 
     deallocate(dist_matrix, dist_atoms )
 
 enddo 
+
+do type1 = 1, N_species
+    do type2 = 1, N_species
+        if (type1==type2) cycle
+        mat_pdf(type1,type2,:) = mat_pdf(type1,type2,:)/real(N_file,8)
+    enddo
+enddo
 rewind(unit=123)
-print*, N_file
+!print*, N_file
+!print*, "kaka"
 ! ------------------------------------------------------------
 
 
@@ -110,18 +116,18 @@ do type1 = 1, N_species
         ! Find the first minimum
         call check_min(mat_pdf(type1,type2,:), int(bins*0.5/rmax), min_pdf)
         mat_rcut(type1,type2) = rmax/bins*min_pdf
-        mat_neighbor(type1,type2) = ceiling( integrate(mat_pdf(type1,type2,:),min_pdf,numions(type2)/V,rmax/real(bins)) )
-        write(*,"(2i5,f10.6,i5)") type1, type2, mat_rcut(type1,type2), mat_neighbor(type1,type2)
+        mat_neighbor(type1,type2) = integrate(mat_pdf(type1,type2,:),min_pdf,numions(type2)/V,rmax/real(bins))
+        write(*,"(2i5,2f10.6)") type1, type2, mat_rcut(type1,type2), mat_neighbor(type1,type2)
     enddo
 enddo 
 ! ------------------------------------------------------------
 
-
+stop
 ! 3. READ FIRST CONFIGURATION AND GET THE NEIGHBOR TAGS
 ! ------------------------------------------------------------
 call read_trj(123,cell,coor,numIons,atomtype,io)
 call makeMatrices(cell,coor,numIons,atomType,Rmax,N,V,dist_matrix,dist_atoms)
-call get_neighbor_list2( dist_matrix, dist_atoms, natoms, N_species, atomtype,  mat_neighbor,N_neighbor, neighbor_list )
+call get_neighbor_list2( dist_matrix, dist_atoms, natoms, N_species, atomtype,  ceiling(mat_neighbor),N_neighbor, neighbor_list )
 
 allocate(neighbor_order_list(natoms,N_species,maxval(mat_neighbor)))
 do i = 1, natoms
@@ -149,9 +155,9 @@ do ifile = 1, 100
     if (io < 0) exit
 
     call makeMatrices(cell,coor,numIons,atomType,Rmax,N,V,dist_matrix,dist_atoms)
-    call get_neighbor_list2( dist_matrix, dist_atoms, natoms, N_species, atomtype,  mat_neighbor,N_neighbor, neighbor_list )
+    call get_neighbor_list2( dist_matrix, dist_atoms, natoms, N_species, atomtype, ceiling(mat_neighbor),N_neighbor, neighbor_list )
 
-    call update_angle_distr(neighbor_order_list, atomtype, mat_neighbor, dist_matrix, &
+    call update_angle_distr(neighbor_order_list, atomtype, ceiling(mat_neighbor), dist_matrix, &
                               neighbor_list, mat_adf )
     
     deallocate( dist_matrix, dist_atoms, neighbor_list )
