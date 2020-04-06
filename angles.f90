@@ -5,6 +5,42 @@ implicit none
 
 contains
 
+
+subroutine get_neighbor_list( dist_matrix, dist_atoms, N_atoms, N_species, atomtype, &
+                              N_neighbor, neighbor_list )
+    implicit none
+    integer, intent(in)  :: N_atoms, N_species, dist_atoms(:,:), atomtype(:)
+    real*8, intent(in)   :: dist_matrix(:,:)
+    integer, intent(out) :: N_neighbor(N_atoms, N_species)
+    integer, allocatable, intent(out) :: neighbor_list(:,:,:,:)
+    integer :: aux_list(N_atoms, N_species, size(dist_matrix,1),2)
+    real*8  :: aux_dist(N_atoms, size(dist_matrix,1))
+    integer :: i, iat, iesp, size_neigh, ins(2)
+    real*8  :: d
+
+    aux_list   = 0
+    N_neighbor = 0
+    do i = 1, size(dist_matrix,1)
+        iat  = dist_atoms(i,1)
+        iesp = atomtype( dist_atoms(i,2) )
+        d = norm2( dist_matrix(i,:) )
+
+        ! Insertion sort
+        ins = (/i,dist_atoms(i,2)/)
+        !call insert( aux_dist(iat,:), aux_list(iat,:), N_neighbor(iat), d, i )
+        call insert2( aux_dist(iat,:), aux_list(iat,iesp,:,:), N_neighbor(iat,iesp), d, ins )
+
+    enddo
+    
+    size_neigh = maxval(N_neighbor)
+
+    allocate(neighbor_list(N_atoms, N_species, size_neigh,2))
+
+    neighbor_list = aux_list(:,:,:size_neigh,:)
+
+end subroutine get_neighbor_list
+
+
 ! Solo el numero de vecinos que hay hasta el primer minimo
 subroutine get_neighbor_list2( dist_matrix, dist_atoms, N_atoms, N_species, atomtype, &
                                mat_neighbor,N_neighbor, neighbor_list )
@@ -28,6 +64,7 @@ subroutine get_neighbor_list2( dist_matrix, dist_atoms, N_atoms, N_species, atom
 
         ! Insertion sort
         ins = (/i,dist_atoms(i,2)/)
+        !call insert( aux_dist(iat,:), aux_list(iat,:), N_neighbor(iat), d, i )
         call insert2( aux_dist(iat,iesp,:), aux_list(iat,iesp,:,:), N_neighbor(iat,iesp), d, ins )
 
     enddo
@@ -37,8 +74,43 @@ subroutine get_neighbor_list2( dist_matrix, dist_atoms, N_atoms, N_species, atom
 
     neighbor_list = aux_list(:,:,:size_neigh,:)
 
+    ! N_neighbor = 0
+    ! do iat = 1, N_atoms
+    !    do iesp = 1, N_species
+    !        do i = 1, mat_neighbor(atomtype(iat),iesp)
+    !            neighbor_list(iat,iesp,i,:) = aux_list(iat,iesp,i,:)
+    !            N_neighbor(iat,iesp) = N_neighbor(iat,iesp) + 1
+    !        enddo
+    !    enddo
+    ! enddo
+
 end subroutine get_neighbor_list2
 
+
+subroutine insert(V_dist, W_list, N, x_d, y_n)
+    implicit none
+    real*8, intent(inout)  :: V_dist(:)
+    integer, intent(inout) :: N, W_list(:)
+    real*8, intent(in)     :: x_d
+    integer, intent(in)    :: y_n
+    integer                :: j
+
+    N = N + 1
+    V_dist(N) = x_d
+    W_list(N) = y_n
+    do j = N, 2 , -1
+        if ( V_dist(j-1) < V_dist(j) ) then
+            exit
+        else
+            V_dist(j) = V_dist(j-1)
+            V_dist(j-1) = x_d
+
+            W_list(j) = W_list(j-1)
+            W_list(j-1) = y_n
+        endif
+    enddo
+
+end subroutine insert
 
 
 subroutine insert2(V_dist, W_list, N, x_d, y_n)

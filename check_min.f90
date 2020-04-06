@@ -31,7 +31,7 @@ subroutine check_min ( mat, i_init, min_index )
     logical              :: minimum
 
     N_smooth = 2
-    N_check  = 2
+    N_check  = 10
 
     N = size(mat)
 

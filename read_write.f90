@@ -27,7 +27,7 @@ real*8, dimension(:,:), intent(out)     :: cell
 real*8, dimension(:,:), intent(out)     :: coor
 integer, intent(out)                    :: io
 integer, dimension(size(coor,1))        :: atomtype
-integer, dimension(:), allocatable      :: numIons
+integer, dimension(:)                   :: numIons
 real*8, dimension(3)                    :: r
 real*8, dimension(3,3)                  :: box
 integer                                 :: i, n
@@ -50,8 +50,6 @@ do i = 1, size(coor,1)
     read(in,fmt=*) n, atomtype(n), r
     coor(n,:) = r
 enddo
-
-allocate(numIons(maxval(atomType)))
 
 numIons=0
 do i = 1 , size(coor,1)
@@ -143,11 +141,11 @@ do i = 1, 3
     write(fu,fmt='(3f15.8)') cell(i,:)
 enddo
 
-write(fu,fmt='(a)') "Ca Si O H"
-write(fu,fmt='(a)') "4 4 24 24"
+write(fu,fmt='(a)') "Si O"
+write(fu,fmt='(a)') "192         384"
 write(fu,fmt='(a)') "Cartesian"
 
-do i = 1, 56
+do i = 1, 576
     write(fu,fmt='(3f15.8)') matmul(coor(i,:),cell)
 enddo
 
