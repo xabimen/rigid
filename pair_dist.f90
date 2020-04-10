@@ -12,10 +12,9 @@ integer, intent(in)                     :: bins, type1, type2
 real*8, intent(in)                      :: rcut, V
 real*8, dimension(bins), intent(out)    :: gdr2
 real*8, dimension(bins)                 :: gdr
-real*8                                  :: r
 integer                                 :: i, j, k
 integer                                 :: len
-real*8                                  :: x, c
+real*8                                  :: x, c, r
 
 
 c=0.05d0

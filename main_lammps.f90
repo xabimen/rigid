@@ -1,5 +1,3 @@
-! gfortran read_write.f90 check_min.f90 angles.f90 pair_dist.f90 main.f90
-
 program main
 use read_write
 use pair_dist
@@ -51,6 +49,7 @@ mat_pdf = 0.0d0
 
 ! 1. READ TRAJECTORY AND COMPUTE RADIAL DISTRIBUTION FUNCTIONS 
 ! ------------------------------------------------------------
+print*, "1. READ TRAJECTORY AND COMPUTE RADIAL DISTRIBUTION FUNCTIONS"
 call atom_number(infile,natoms)
 allocate(coor(natoms,3),atomtype(natoms), numions(N_species),N_neighbor(natoms,N_species))
 open(unit=123,file=infile,status='old',action='read')
@@ -65,7 +64,7 @@ N_file = 0
 do
     call read_trj(123,cell,coor,numIons,atomtype,io)
     if (io < 0) exit
-    if(N_file == 100) exit
+    if(N_file == 10) exit
 
     N_file = N_file + 1
     print*, "READING FILE ", N_file
@@ -103,10 +102,10 @@ rewind(unit=123)
 
 ! 2. FIND THE MINIMUM OF THE RDF FOR EACH PAIR OF SPECIES
 ! ------------------------------------------------------------
+print*, "2. FIND THE MINIMUM OF THE RDF FOR EACH PAIR OF SPECIES"
 do type1 = 1, N_species
 
     do type2 = 1, N_species
-
         if (type1 == type2) cycle
 
         write(caux1,"(i1)") type1
@@ -122,14 +121,14 @@ do type1 = 1, N_species
 enddo 
 ! ------------------------------------------------------------
 
-stop
 ! 3. READ FIRST CONFIGURATION AND GET THE NEIGHBOR TAGS
 ! ------------------------------------------------------------
+print*, "3. READ FIRST CONFIGURATION AND GET THE NEIGHBOR TAGS"
 call read_trj(123,cell,coor,numIons,atomtype,io)
 call makeMatrices(cell,coor,numIons,atomType,Rmax,N,V,dist_matrix,dist_atoms)
 call get_neighbor_list2( dist_matrix, dist_atoms, natoms, N_species, atomtype,  ceiling(mat_neighbor),N_neighbor, neighbor_list )
 
-allocate(neighbor_order_list(natoms,N_species,maxval(mat_neighbor)))
+allocate(neighbor_order_list(natoms,N_species,maxval(ceiling(mat_neighbor))))
 do i = 1, natoms
     do type1 = 1, N_species
         do j = 1, mat_neighbor(atomtype(i),type1)
@@ -148,6 +147,7 @@ mat_adf = 0.0d0
 
 ! 4. READ TRAJECTORY AND COMPUTE THE DISTRIBUTION OF EACH ANGLE
 ! ------------------------------------------------------------
+print*, "4. READ TRAJECTORY AND COMPUTE THE DISTRIBUTION OF EACH ANGLE"
 rewind(unit = 123)
 do ifile = 1, 100
 
@@ -169,6 +169,7 @@ close(unit = 123)
 
 ! 5. COMPUTE THE STANDAR DEVIATION OF EACH ANGLE DISTRIBUTION
 ! ------------------------------------------------------------
+print*, "5. COMPUTE THE STANDAR DEVIATION OF EACH ANGLE DISTRIBUTION"
 allocate( mean(natoms,N_species,max_pair), sigma(natoms,N_species,max_pair) )
 
 do iat = 1, natoms
