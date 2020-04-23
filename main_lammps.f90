@@ -26,12 +26,16 @@ real*8, allocatable                  :: mat_rcut(:,:), mat_theta(:,:,:), mat_pdf
 
 character(len=2), allocatable   :: species(:)
 character(len=100), allocatable :: file_list(:)
-character(1) :: caux1, caux2
+character(4) :: caux1, caux2
 character(13) :: infile
+
+logical :: same
+integer :: nn, ext, cont
 
 infile = "qe1.lammpstrj"
 rmax = 5.0
 bins = 200
+ext = 2
 
 
 allocate(species(2))
@@ -53,11 +57,11 @@ print*, "1. READ TRAJECTORY AND COMPUTE RADIAL DISTRIBUTION FUNCTIONS"
 call atom_number(infile,natoms)
 allocate(coor(natoms,3),atomtype(natoms), numions(N_species),N_neighbor(natoms,N_species))
 open(unit=123,file=infile,status='old',action='read')
-call read_trj(123,cell,coor,numIons,atomtype,io)
 
-print*, numIons(:)
-open(unit=124,file="kaka_POSCAR",status='replace',action='write')
-call write_vasp(124,cell,coor)
+! call read_trj(123,cell,coor,numIons,atomtype,io)
+! print*, numIons(:)
+! open(unit=124,file="kaka_POSCAR",status='replace',action='write')
+! call write_vasp(124,cell,coor)
 
 
 N_file = 0
@@ -128,18 +132,18 @@ call read_trj(123,cell,coor,numIons,atomtype,io)
 call makeMatrices(cell,coor,numIons,atomType,Rmax,N,V,dist_matrix,dist_atoms)
 call get_neighbor_list2( dist_matrix, dist_atoms, natoms, N_species, atomtype,  ceiling(mat_neighbor),N_neighbor, neighbor_list )
 
-allocate(neighbor_order_list(natoms,N_species,maxval(ceiling(mat_neighbor))))
+allocate(neighbor_order_list(natoms,N_species,maxval(ceiling(mat_neighbor))+ext))
 do i = 1, natoms
     do type1 = 1, N_species
-        do j = 1, mat_neighbor(atomtype(i),type1)
+        do j = 1, ceiling(mat_neighbor(atomtype(i),type1))+ext
             neighbor_order_list(i,type1,j) = neighbor_list(i,type1,j,2)    
         enddo
     enddo
 enddo
 deallocate( dist_matrix, dist_atoms, neighbor_list )
 
-
-max_pair = maxval( mat_neighbor ) * ( maxval(mat_neighbor)-1 )/2
+max_pair = maxval(ceiling(mat_neighbor))+ext
+max_pair = max_pair*(max_pair-1)/2
 allocate( mat_adf(natoms,N_species,max_pair,bins) )
 mat_adf = 0.0d0
 ! ------------------------------------------------------------
@@ -149,21 +153,40 @@ mat_adf = 0.0d0
 ! ------------------------------------------------------------
 print*, "4. READ TRAJECTORY AND COMPUTE THE DISTRIBUTION OF EACH ANGLE"
 rewind(unit = 123)
+!cont = 0
 do ifile = 1, 100
 
     call read_trj(123,cell,coor,numIons,atomtype,io)
     if (io < 0) exit
 
+    if(ifile == 10) exit
+
     call makeMatrices(cell,coor,numIons,atomType,Rmax,N,V,dist_matrix,dist_atoms)
     call get_neighbor_list2( dist_matrix, dist_atoms, natoms, N_species, atomtype, ceiling(mat_neighbor),N_neighbor, neighbor_list )
 
-    call update_angle_distr(neighbor_order_list, atomtype, ceiling(mat_neighbor), dist_matrix, &
+    ! do i = 1, natoms
+    !     do type1 = 1, N_species
+    !         if (type1 == atomtype(i)) cycle
+    !         nn = ceiling( mat_neighbor(atomtype(i),type1) )
+    !         call compare( neighbor_order_list(i,type1,:nn+ext), neighbor_list(i,type1,:nn,2), same )
+    !         if ( .not. same ) then
+    !             cont = cont + 1
+    !             print*, ifile,i, type1
+    !             print*, neighbor_order_list(i,type1,:nn+ext)
+    !             print*, neighbor_list(i,type1,:nn,2)
+    !             print*,
+    !         endif
+    !     enddo
+    ! enddo
+
+    call update_angle_distr ( ext, neighbor_order_list, atomtype, ceiling(mat_neighbor), dist_matrix, &
                               neighbor_list, mat_adf )
     
     deallocate( dist_matrix, dist_atoms, neighbor_list )
 
 enddo
 close(unit = 123)
+!print*, cont
 ! ------------------------------------------------------------
 
 
@@ -181,19 +204,19 @@ do iat = 1, natoms
 
 
         call get_mean_sigma( N_pair, mat_adf(iat,iesp,:,:), mean(iat,iesp,:), sigma(iat,iesp,:) )
-        write(*,"(2i5,100f10.3)") iat,iesp, mean(iat,iesp,:N_pair)
-        write(*,"(2i5,100f10.3)") iat,iesp, sigma(iat,iesp,:N_pair)
-        write(*,*)
+        !write(*,"(2i5,100f10.3)") iat,iesp, mean(iat,iesp,:N_pair)
+        !write(*,"(2i5,100f10.3)") iat,iesp, sigma(iat,iesp,:N_pair)
+        !write(*,*)
 
-        write(caux1,"(i1)") iat
-        write(caux2,"(i1)") iesp
+        write(caux1,"(i4)") iat
+        write(caux2,"(i4)") iesp
 
-        call write_angle_distr_full( "adf_at"//caux1//"_esp"//caux2//".dat", &
+        call write_angle_distr_full( "adf_at"//trim(adjustl(caux1))//"_esp"//trim(adjustl(caux1))//".dat", &
                                       N_pair, mat_adf(iat,iesp,:,:) )
+
 
     enddo
 enddo
 ! ------------------------------------------------------------
-
 
 end program

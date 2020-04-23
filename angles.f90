@@ -6,6 +6,34 @@ implicit none
 contains
 
 
+subroutine compare(ref, vec, out)
+    implicit none
+    integer, intent(in)   :: ref(:), vec(:)
+    logical, intent(out) :: out
+
+    integer :: i, j, N, cont
+
+    N = size(vec)
+
+    cont = 0
+    do i = 1, size(vec)
+        do j = 1, size(ref)
+            if (vec(i) == ref(j)) then
+                cont = cont + 1
+                exit
+            endif
+        enddo
+    enddo
+
+    if (cont == N) then
+        out = .true.
+    else
+        out = .false.
+    endif
+
+end subroutine compare
+
+
 subroutine get_neighbor_list( dist_matrix, dist_atoms, N_atoms, N_species, atomtype, &
                               N_neighbor, neighbor_list )
     implicit none
@@ -167,9 +195,9 @@ subroutine find_pair_index( tag1, tag2, neighbor_order_list, N_neighbor, ind, ie
     enddo
 
     if (ind1 < 0 .or. ind2 < 0) then
-        print*, "ERROR: ", ind1, ind2
-        print*, tag1, tag2
-        print*, neighbor_order_list(:)
+        ! print*, "ERROR: ", ind1, ind2
+        ! print*, tag1, tag2
+        ! print*, neighbor_order_list(:)
         ierr = -1
         !STOP
     else
@@ -184,10 +212,10 @@ subroutine find_pair_index( tag1, tag2, neighbor_order_list, N_neighbor, ind, ie
 end subroutine find_pair_index
 
 
-subroutine update_angle_distr(neighbor_order_list, atomtype, mat_neighbor, &
+subroutine update_angle_distr(ext, neighbor_order_list, atomtype, mat_neighbor, &
                               dist_matrix, neighbor_list, angle_distr )
     implicit none
-    integer, intent(in)   :: neighbor_order_list(:,:,:), atomtype(:), &
+    integer, intent(in)   :: ext, neighbor_order_list(:,:,:), atomtype(:), &
                              neighbor_list(:,:,:,:), mat_neighbor(:,:)
     real*8, intent(in)    :: dist_matrix(:,:)
     real*8, intent(inout) :: angle_distr(:,:,:,:)
@@ -226,24 +254,26 @@ subroutine update_angle_distr(neighbor_order_list, atomtype, mat_neighbor, &
 
                     ! Find index in the angle_distr corresponding to the pair (n1,n2)
                     call find_pair_index( tag1, tag2, neighbor_order_list(iat,iesp,:), &
-                                          N_neigh, ind, ierr )
+                                          N_neigh+ext, ind, ierr )
 
-                    if (ierr == -1) then
-                        print*, iat, iesp 
-                        write(*,"(100i5)") neighbor_list(iat,iesp,:N_neigh,2)
-                        write(*,"(100i5)") neighbor_order_list(iat,iesp,:N_neigh)
-                        STOP
-                    endif
+                    ! if (ierr == -1) then
+                    !     print*, iat, iesp 
+                    !     write(*,"(100i5)") neighbor_list(iat,iesp,:N_neigh,2)
+                    !     write(*,"(100i5)") neighbor_order_list(iat,iesp,:N_neigh)
+                    !     STOP
+                    ! endif
 
-                    ! Update histogram
-                    theta =  ( sum(rj*rk) / (norm2(rj)*norm2(rk)) )
-                    if (abs(theta) + 1.0D-8 < 1.0d0) then
-                        theta = acos(theta)
-                        do ihist=1, bins
-                            x=pi/bins*ihist
-                            angle_distr(iat,iesp,ind,ihist) = angle_distr(iat,iesp,ind,ihist) + &
-                                                              exp(-(x-theta)**2/(2.0d0*c**2))/(c*sqrt(2.0d0*pi))
-                        enddo
+                    if (ierr == 0) then
+                        ! Update histogram
+                        theta =  ( sum(rj*rk) / (norm2(rj)*norm2(rk)) )
+                        if (abs(theta) + 1.0D-8 < 1.0d0) then
+                            theta = acos(theta)
+                            do ihist=1, bins
+                                x=pi/bins*ihist
+                                angle_distr(iat,iesp,ind,ihist) = angle_distr(iat,iesp,ind,ihist) + &
+                                                                  exp(-(x-theta)**2/(2.0d0*c**2))/(c*sqrt(2.0d0*pi))
+                            enddo
+                        endif
                     endif
 
                 enddo
