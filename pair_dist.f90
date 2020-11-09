@@ -1,6 +1,311 @@
 module pair_dist
 
 contains
+
+subroutine find_neigh_index( tag1, neighbor_order_list, N_neighbor, ind, ierr )
+    implicit none
+    integer, intent(in)  :: tag1, neighbor_order_list(:), N_neighbor
+    integer, intent(out) :: ind, ierr
+    integer :: i, j, found1
+
+    found1 = 0
+    ind = -1
+    do i = 1, N_neighbor
+
+        if (found1 == 1 ) then
+            exit
+        endif
+
+        if ( neighbor_order_list(i) == tag1 ) then
+            ind = i
+            found1 = found1 + 1
+        endif
+
+    enddo
+
+    if (ind < 0 ) then
+        ! print*, "ERROR: ", ind1, ind2
+        ! print*, tag1, tag2
+        ! print*, neighbor_order_list(:)
+        ierr = -1
+        !STOP
+    else
+        ierr = 0
+    endif
+
+    
+end subroutine find_neigh_index
+
+
+subroutine update_dist_distr(ext, V, neighbor_order_list, atomtype, numIons, mat_neighbor, &
+                              dist_matrix, neighbor_list, Rcut, dist_distr, cont_pdf )
+    implicit none
+    integer, intent(in)   :: ext, neighbor_order_list(:,:,:), atomtype(:), &
+                             neighbor_list(:,:,:,:), mat_neighbor(:,:), numIons(:)
+    real*8, intent(in)    :: dist_matrix(:,:), Rcut, V
+    real*8, intent(inout) :: dist_distr(:,:,:,:)
+    integer, intent(inout) :: cont_pdf(:,:,:)
+    integer               :: N_atoms, N_species, max_neigh, bins, N_pair, N_neigh
+    integer               :: iat, iesp, ipair, n1, n2, tag1, tag2, ind, ihist, ierr
+    real*8                :: rj(3), rk(3), pi, c, r, x, norm
+
+    pi = acos(-1.0d0)
+    c  = 0.03d0
+
+    N_atoms   = size(dist_distr,1)
+    N_species = size(dist_distr,2)
+    max_neigh  = size(dist_distr,3)
+    bins      = size(dist_distr,4)
+
+
+    ! Loop in atoms
+    do iat = 1, N_atoms 
+
+        ! Loop in species
+        do iesp = 1, N_species 
+
+            if ( atomtype(iat) == iesp ) cycle
+
+            N_neigh = mat_neighbor(atomtype(iat),iesp)
+
+            ! Loop in all neighbors
+            do n1 = 1, mat_neighbor(atomtype(iat),iesp) + ext
+                tag1 = neighbor_list(iat,iesp,n1,2)
+                rj   = dist_matrix( neighbor_list(iat,iesp,n1,1), : )
+
+                call find_neigh_index( tag1, neighbor_order_list(iat,iesp,:), N_neigh+ext, ind, ierr )
+
+                if (ierr == 0) then
+                    ! Update histogram
+                    cont_pdf(iat,iesp,ind) = cont_pdf(iat,iesp,ind) + 1
+                    r = norm2(rj)
+
+                    ihist = int(r/rcut*bins)
+
+                    norm = rcut/bins/( 4.0d0*pi * (rcut/bins)**3 * ( ihist**2 - ihist + 1.0d0/3 )  ) * &
+                               1.0!/(numIons(iesp)*numIons(atomtype(iat)))!*numions(iesp)
+
+                    dist_distr(iat,iesp,ind,ihist) = dist_distr(iat,iesp,ind,ihist) + norm
+
+
+                    ! do ihist=1, bins
+                    !     !if ((ihist*3-(ihist-1)**3)<0) print*, ihist, ihist**3, (ihist-1)**3, ihist*3-(ihist-1)**3
+                    !     x=rcut/real(bins,8)*ihist
+
+                    !     !print*,  ihist**3 - (ihist-1)**3, 4.0/3 * 2.25d0*(2*ihist-3)**2+6.75d0 
+                    !     !print*, 4*pi*x**2*rcut/bins, 4.0d0*pi * (rcut/bins)**3 * ( ihist**2 - ihist + 1.0d0/3 ) 
+
+                    !     norm = rcut/bins/( 4.0d0*pi * (rcut/bins)**3 * ( ihist**2 - ihist + 1.0d0/3 )  ) * &
+                    !            1.0!/(numIons(iesp)*numIons(atomtype(iat)))!*numions(iesp)
+                    !     !norm = rcut/bins/(4.0d0/3*pi * (rcut/bins)**3 * ( 2.25d0*(2*ihist-3)**2+6.75d0 ) ) !* V
+
+                    !     ! i^3 - (i-1)^3 = 2.25*(2*x-3) + 6.75
+                    !     dist_distr(iat,iesp,ind,ihist) = dist_distr(iat,iesp,ind,ihist) + &
+                    !                                       exp(-(x-r)**2/(2.0d0*c**2))/(c*sqrt(2.0d0*pi))*norm
+                    ! enddo
+
+                endif
+
+
+            enddo
+
+        enddo
+
+    enddo
+
+
+! gdr(:)=gdr(:)/real(numIons(type1),8)
+! gdr2=0.0
+! do i = 2, bins
+!     !if (i==1) then
+!         !gdr2(i) = gdr(i)*rcut/real(bins,8)/(4.0*3.1416*((rcut/real(bins,8))**3*(i**3-(i-1)**3))/3.0d0)*V/(norm)
+!     !else
+!         gdr2(i) = ((gdr(i)+gdr(i-1))/2.0d0)*(rcut/real(bins,8))/ &
+!         (4.0*3.1416*((rcut/real(bins,8))**3*(i**3-(i-1)**3))/3.0d0)*V/(numIons(type2))
+!     !endif
+! enddo
+
+
+end subroutine update_dist_distr
+
+
+function integratee(pdf,min_index,norm,dx) result(ans)
+implicit none
+real*8, dimension(:), intent(in)            :: pdf
+integer, intent(in)                         :: min_index
+real*8, intent(in)                          :: dx, norm
+real*8                                      :: ans, pi
+integer                                     :: i
+
+pi = acos(-1.0d0)
+ans= 0.0
+
+do i = 2, min_index
+    ans = ans + dx*((pdf(i)+pdf(i-1))/2.0d0)*(4.0*pi*(dx*(i-0.5d0))**2)!*norm
+enddo   
+end function
+
+
+subroutine apply_smearing_dist(histogram, rmax)
+    implicit none
+    real*8, intent(inout) :: histogram(:)
+    real*8, intent(in)    :: rmax
+    integer :: bins, ihist, jhist
+    real*8  :: copy(size(histogram)), r, x, pi, c
+
+    pi = acos(-1.0d0)
+    c  = 0.03d0
+
+    bins = size(histogram)
+    copy = 0.0d0
+
+    do ihist = 1, bins
+        if (histogram(ihist) < 1.0D-8) cycle
+        r = (rmax/bins)*(ihist+0.5d0)
+        do jhist = 1, bins
+            x = (rmax/bins)*jhist
+            copy(jhist) = copy(jhist) + histogram(ihist)*exp(-(x-r)**2/(2.0d0*c**2))/(c*sqrt(2.0d0*pi))
+        enddo
+    enddo 
+
+    histogram = copy
+
+end subroutine apply_smearing_dist
+
+
+
+! dist_distr :: Distribution of the distance between each couple of atoms
+!               lenght(natoms,N_species,max_neigh,bins)
+! contribution_pdf :: Decomposition of the total_pdf into the distributions of the first neighbors
+!                     lenght(N_species,N_species,max_neigh,bins)
+! total_pdf  :: total pdf for each pair of species
+!               lenght(N_species,N_species,bins)
+subroutine total_pdf( ext, rmax, dist_distr, mat_neighbor, neighbor_list, atomtype, numions, contribution_pdf, tot_pdf, cont_pdf)
+    implicit none
+    real*8, intent(in)    :: rmax
+    integer, intent(in)   :: ext, neighbor_list(:,:,:,:), mat_neighbor(:,:), atomtype(:), numions(:), cont_pdf(:,:,:)
+    real*8, intent(out)   :: tot_pdf(:,:,:), contribution_pdf(:,:,:,:)
+    real*8, intent(inout) :: dist_distr(:,:,:,:)
+    integer :: N_atoms, N_species, max_neigh, bins, iat, iesp, n1, ihist, jesp
+
+
+    N_atoms   = size(dist_distr,1)
+    N_species = size(dist_distr,2)
+    max_neigh = size(dist_distr,3)
+    bins      = size(dist_distr,4)
+
+    tot_pdf = 0.0d0
+    contribution_pdf = 0.0d0
+
+
+    ! Loop in atoms
+    do iat = 1, N_atoms
+
+        ! Loop in species
+        do iesp = 1, N_species 
+
+            if ( atomtype(iat) == iesp ) cycle
+
+            do n1 = 1, mat_neighbor(atomtype(iat),iesp) + ext
+
+                call apply_smearing_dist(dist_distr(iat,iesp,n1,:), rmax)
+
+                !print*, iat, iesp, n1, &
+                !      integratee(dist_distr(iat,iesp,n1,:),bins,numions(iesp)/1.0d0,rmax/real(bins)) 
+
+                do ihist = 1, bins
+
+                    contribution_pdf(atomtype(iat),iesp,n1,ihist) = contribution_pdf(atomtype(iat),iesp,n1,ihist) + &
+                                                                    dist_distr(iat,iesp,n1,ihist)/cont_pdf(iat,iesp,n1) / &
+                                                                    (mat_neighbor(atomtype(iat),iesp)+ext)
+                    tot_pdf(atomtype(iat),iesp,ihist) = tot_pdf(atomtype(iat),iesp,ihist) + &
+                                                        dist_distr(iat,iesp,n1,ihist)!/mat_neighbor(atomtype(iat),iesp)
+
+                enddo
+
+            enddo
+
+        enddo
+
+    enddo
+
+    !  do iat = 1, N_atoms
+
+    !     ! Loop in species
+    !     do iesp = 1, N_species 
+
+    !         if ( atomtype(iat) == iesp ) cycle
+
+    !         do n1 = 1, mat_neighbor(atomtype(iat),iesp)
+
+    !             print*, iat, iesp, n1, &
+    !                  integratee(contribution_pdf(atomtype(iat),iesp,n1,:),bins,numions(iesp)/1.0d0,rmax/real(bins)) 
+
+    !         enddo
+
+    !     enddo
+    !     print*, ""
+
+    ! enddo
+
+    tot_pdf = sum(contribution_pdf,dim=3)
+    do iesp = 1, N_species
+        do jesp = 1, N_species
+            tot_pdf(iesp,jesp,:) = tot_pdf(iesp,jesp,:)!mat_neighbor(atomtype(iat),iesp)
+        enddo
+    enddo
+
+
+end subroutine total_pdf
+
+
+subroutine get_mean_sigma_dist( N_pair, angle_distr, mean, sigma )
+    implicit none
+    integer, intent(in)   :: N_pair
+    real*8, intent(inout) :: angle_distr(:,:)
+    real*8, intent(out)   :: mean(:), sigma(:)
+    real*8, parameter     :: pi = acos(-1.0d0)
+    real*8                :: x, dx, norm
+    integer               :: ipair, i, N   
+
+    N = size(angle_distr,2)
+    dx = pi/N
+
+    mean = 0.0d0
+    sigma = 0.0d0
+
+
+    do ipair = 1, N_pair
+        norm = sum(angle_distr(ipair,:))*dx
+
+        do i = 1, N
+            if (angle_distr(ipair,i) > 1.0d-14) then
+                angle_distr(ipair,i) = angle_distr(ipair,i)/norm
+            endif
+        enddo 
+
+
+        do i = 1, N
+            x = (i-0.5)*dx
+            mean(ipair) = mean(ipair) + x * angle_distr(ipair,i) * dx
+        enddo
+
+        do i = 1, N
+            x = (i-0.5)*dx
+            sigma(ipair) = sigma(ipair) + ( x-mean(ipair) )**2 * angle_distr(ipair,i) * dx
+        enddo
+
+    enddo
+
+
+    mean = mean*180/pi
+    sigma = sqrt(sigma)*180/pi
+
+
+end subroutine get_mean_sigma_dist
+
+
+
 !************************************
 !************************************
 subroutine compute_gdr(dist_matrix,dist_atoms,atomType,type1,type2,numIons,V,bins,rcut,gdr2)

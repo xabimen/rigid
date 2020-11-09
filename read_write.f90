@@ -272,6 +272,47 @@ subroutine write_gdr( filename, gdr, rmax )
 end subroutine write_gdr
 !*********************************************
 !*********************************************
+subroutine write_gdr_full( filename, N_neigh, gdr, rmax )
+    implicit none
+    character(*), intent(in) :: filename
+    real*8, intent(in)       :: gdr(:,:), rmax
+    integer, intent(in)      :: N_neigh
+    integer                  :: i, N
+    real*8                   :: dr
+
+    N = size(gdr,2)
+    dr = rmax/N
+
+
+    open(unit = 1, status = "replace", action = "write", file = filename)
+    do i = 1, N
+        write(1,"(100f12.6)") dr*(i-0.5), gdr(:N_neigh,i)
+    enddo
+    close(unit = 1)
+
+end subroutine write_gdr_full
+!*********************************************
+!*********************************************
+subroutine write_gdr_tot_contr( filename, N_neigh, contr, tot, rmax )
+    implicit none
+    character(*), intent(in) :: filename
+    real*8, intent(in)       :: contr(:,:), tot(:), rmax
+    integer, intent(in)      :: N_neigh
+    integer                  :: i, N
+    real*8                   :: dr
+
+    N = size(contr,2)
+    dr = rmax/N
+
+    open(unit = 1, status = "replace", action = "write", file = filename)
+    do i = 1, N
+        write(1,"(100f12.4)") dr*(i-0.5), tot(i), contr(:N_neigh,i)
+    enddo
+    close(unit = 1)
+
+end subroutine write_gdr_tot_contr
+!*********************************************
+!*********************************************
 subroutine write_angle_distr( filename, angle_distr )
     implicit none
     character(*), intent(in) :: filename
@@ -309,6 +350,27 @@ subroutine write_angle_distr_full( filename, N_pair, angle_distr )
     close(unit = 1)
 
 end subroutine write_angle_distr_full
+!*********************************************
+!*********************************************
+subroutine write_angle_tot_contr( filename, ext, N_neigh, contr, tot )
+    implicit none
+    character(*), intent(in) :: filename
+    real*8, intent(in)       :: contr(:,:), tot(:)
+    integer, intent(in)      :: N_neigh, ext
+    integer                  :: i, N, N_pair
+    real*8                   :: dr
+
+    N = size(contr,2)
+    dr = 180.0d0/N
+    N_pair = N_neigh*(N_neigh-1)/2 + ext
+
+    open(unit = 1, status = "replace", action = "write", file = filename)
+    do i = 1, N
+        write(1,"(100f12.4)") dr*(i-0.5), tot(i), contr(:N_pair,i)
+    enddo
+    close(unit = 1)
+
+end subroutine write_angle_tot_contr
 !*********************************************
 !*********************************************
 subroutine get_all_files (directory, N_file, file_list)

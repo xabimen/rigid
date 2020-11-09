@@ -213,12 +213,13 @@ end subroutine find_pair_index
 
 
 subroutine update_angle_distr(ext, neighbor_order_list, atomtype, mat_neighbor, &
-                              dist_matrix, neighbor_list, angle_distr )
+                              dist_matrix, neighbor_list, angle_distr, cont_adf )
     implicit none
     integer, intent(in)   :: ext, neighbor_order_list(:,:,:), atomtype(:), &
                              neighbor_list(:,:,:,:), mat_neighbor(:,:)
     real*8, intent(in)    :: dist_matrix(:,:)
     real*8, intent(inout) :: angle_distr(:,:,:,:)
+    integer, intent(inout) :: cont_adf(:,:,:)
     integer               :: N_atoms, N_species, max_pair, bins, N_pair, N_neigh
     integer               :: iat, iesp, ipair, n1, n2, tag1, tag2, ind, ihist, ierr
     real*8                :: rj(3), rk(3), pi, c, theta, x
@@ -267,12 +268,15 @@ subroutine update_angle_distr(ext, neighbor_order_list, atomtype, mat_neighbor, 
                         ! Update histogram
                         theta =  ( sum(rj*rk) / (norm2(rj)*norm2(rk)) )
                         if (abs(theta) + 1.0D-8 < 1.0d0) then
+                            cont_adf(iat,iesp,ind) = cont_adf(iat,iesp,ind) + 1
                             theta = acos(theta)
-                            do ihist=1, bins
-                                x=pi/bins*ihist
-                                angle_distr(iat,iesp,ind,ihist) = angle_distr(iat,iesp,ind,ihist) + &
-                                                                  exp(-(x-theta)**2/(2.0d0*c**2))/(c*sqrt(2.0d0*pi))
-                            enddo
+                            ihist = int(theta/pi*bins)
+                            angle_distr(iat,iesp,ind,ihist) = angle_distr(iat,iesp,ind,ihist) + 1.0d0
+                            ! do ihist=1, bins
+                            !     x=pi/bins*ihist
+                            !     angle_distr(iat,iesp,ind,ihist) = angle_distr(iat,iesp,ind,ihist) + &
+                            !                                       exp(-(x-theta)**2/(2.0d0*c**2))/(c*sqrt(2.0d0*pi))
+                            ! enddo
                         endif
                     endif
 
@@ -288,9 +292,117 @@ subroutine update_angle_distr(ext, neighbor_order_list, atomtype, mat_neighbor, 
 end subroutine update_angle_distr
 
 
-subroutine get_mean_sigma( N_pair, angle_distr, mean, sigma )
+
+subroutine apply_smearing_ang(histogram)
+    implicit none
+    real*8, intent(inout) :: histogram(:)
+    integer :: bins, ihist, jhist
+    real*8  :: copy(size(histogram)), theta, x, pi, c
+
+    pi = acos(-1.0d0)
+    c  = 0.03d0
+
+    bins = size(histogram)
+    copy = 0.0d0
+
+    do ihist = 1, bins
+        if (histogram(ihist) < 1.0D-8) cycle
+        theta = (pi/bins)*(ihist+0.5d0)
+        do jhist = 1, bins
+            x = (pi/bins)*jhist
+            copy(jhist) = copy(jhist) + histogram(ihist)*exp(-(x-theta)**2/(2.0d0*c**2))/(c*sqrt(2.0d0*pi))
+        enddo
+    enddo 
+
+    histogram = copy
+
+end subroutine apply_smearing_ang
+
+
+! angle_distr :: Distribution of the distance between each couple of atoms
+!               lenght(natoms,N_species,max_neigh,bins)
+! contribution_adf :: Decomposition of the total_pdf into the distributions of the first neighbors
+!                     lenght(N_species,N_species,max_neigh,bins)
+! total_adf  :: total pdf for each pair of species
+!               lenght(N_species,N_species,bins)
+
+subroutine total_adf( ext, angle_distr, mat_neighbor, neighbor_list, atomtype, numions, contribution_adf, tot_adf, cont_adf)
+    implicit none
+    real*8, intent(inout)  :: angle_distr(:,:,:,:)
+    integer, intent(in) :: ext, neighbor_list(:,:,:,:), mat_neighbor(:,:), atomtype(:), numions(:), cont_adf(:,:,:)
+    real*8, intent(out) :: tot_adf(:,:,:), contribution_adf(:,:,:,:)
+    integer :: N_atoms, N_species, max_neigh, bins, iat, iesp, n1, ihist, jesp, N_neigh
+    integer, allocatable :: cont(:,:,:)
+
+
+    N_atoms   = size(angle_distr,1)
+    N_species = size(angle_distr,2)
+    max_neigh = size(angle_distr,3)
+    bins      = size(angle_distr,4)
+
+    tot_adf = 0.0d0
+    contribution_adf = 0.0d0
+
+    allocate(cont(N_species, N_species, max_neigh))
+
+    ! Loop in atoms
+    do iat = 1, N_atoms
+
+        ! Loop in species
+        do iesp = 1, N_species 
+
+            if ( atomtype(iat) == iesp ) cycle
+            N_neigh = mat_neighbor(atomtype(iat),iesp)*(mat_neighbor(atomtype(iat),iesp)-1)/2! + ext
+            do n1 = 1, N_neigh
+
+                !call apply_smearing_ang( angle_distr(iat,iesp,n1,:) )
+
+                cont(atomtype(iat),iesp,n1) = cont(atomtype(iat),iesp,n1) + 1
+                do ihist = 1, bins
+
+                    !if ( angle_distr(iat,iesp,n1,ihist) > 1.0d-8 ) then
+                        !print*, iat, iesp, n1, sum(angle_distr(iat,iesp,n1,:))*acos(-1.0d0)/bins
+                        contribution_adf(atomtype(iat),iesp,n1,ihist) = contribution_adf(atomtype(iat),iesp,n1,ihist) + &
+                                                                        angle_distr(iat,iesp,n1,ihist)!/cont_adf(iat,iesp,n1)! / &
+                                                                        !N_neigh
+                    !endif
+
+                enddo
+
+                !if (atomtype(iat)==1 .and. iesp==2 .and. n1 == 1) then
+                ! if (sum(contribution_adf(iat,iesp,n1,:))< 1.0d0) then
+                !     print*, iat, sum(contribution_adf(iat,iesp,n1,:)),  maxval(contribution_adf(iat,iesp,n1,:)), &
+                !      minval(contribution_adf(iat,iesp,n1,:)),  cont(atomtype(iat),iesp,n1)
+                ! endif
+
+            enddo
+
+        enddo
+
+    enddo
+
+    do iat = 1, N_species
+        do iesp = 1, N_species
+            if(iat == iesp) cycle
+            N_neigh = mat_neighbor(iat,iesp)*(mat_neighbor(iat,iesp)-1)/2! + ext
+            do n1 = 1, N_neigh
+                contribution_adf(iat,iesp,n1,:) = contribution_adf(iat,iesp,n1,:)/cont(iat,iesp,n1)
+                !print*, iat, iesp, n1, sum(contribution_adf(iat,iesp,n1,:))*acos(-1.0d0)/bins
+            enddo
+        enddo
+    enddo
+
+    !tot_adf = sum(contribution_adf,dim=3)
+
+end subroutine total_adf
+
+
+
+
+subroutine get_mean_sigma_angle( N_pair, angle_distr, mean, sigma, normalize )
     implicit none
     integer, intent(in)   :: N_pair
+    logical, intent(in)   :: normalize
     real*8, intent(inout) :: angle_distr(:,:)
     real*8, intent(out)   :: mean(:), sigma(:)
     real*8, parameter     :: pi = acos(-1.0d0)
@@ -305,14 +417,17 @@ subroutine get_mean_sigma( N_pair, angle_distr, mean, sigma )
 
 
     do ipair = 1, N_pair
-        norm = sum(angle_distr(ipair,:))*dx
+        
 
-        do i = 1, N
-            if (angle_distr(ipair,i) > 1.0d-14) then
-                angle_distr(ipair,i) = angle_distr(ipair,i)/norm
-            endif
-        enddo 
-
+        if (normalize) then
+            call apply_smearing_ang(angle_distr(ipair,:))
+            norm = sum(angle_distr(ipair,:))*dx
+            do i = 1, N
+                if (angle_distr(ipair,i) > 1.0d-14) then
+                    angle_distr(ipair,i) = angle_distr(ipair,i)/norm
+                endif
+            enddo 
+        endif
 
         do i = 1, N
             x = (i-0.5)*dx
@@ -324,6 +439,9 @@ subroutine get_mean_sigma( N_pair, angle_distr, mean, sigma )
             sigma(ipair) = sigma(ipair) + ( x-mean(ipair) )**2 * angle_distr(ipair,i) * dx
         enddo
 
+        !print*, sum(angle_distr(ipair,:))*dx
+
+
     enddo
 
 
@@ -331,6 +449,6 @@ subroutine get_mean_sigma( N_pair, angle_distr, mean, sigma )
     sigma = sqrt(sigma)*180/pi
 
 
-end subroutine get_mean_sigma
+end subroutine get_mean_sigma_angle
 
 end module mod_angles
