@@ -1,10 +1,13 @@
-qe1.lammpstrj				! Lammps trajectory
-2							! Number of species in the system
-Si O 						! Species in the system
-4.0							! Maximum radius for the radial distribution function
-200							! Number of bins for the histograms												! 200
-0							! ext: number of extra atoms cosidered apart from the first neighbors             !2
+qe1.lammpstrj			! Lammps trajectory
+2						! Number of species in the system
+Si O 					! Species in the system
+4.0						! Maximum radius for the radial distribution function
+400						! Number of bins for the histograms										! 200
+0						! ext: number of extra atoms cosidered apart from the first neighbors 	!2
 
-.false.						! compute_first_neighbors
-.true.						! plot_results	 
-.true.						! Compute_deviations
+.false.					! compute_first_neighbors
+.true.					! plot_results	 
+.true.					! Compute_deviations
+
+.false.					! Check_constraints. 
+10.0					! angle standard deviation limit

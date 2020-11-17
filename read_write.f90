@@ -373,6 +373,22 @@ subroutine write_angle_tot_contr( filename, ext, N_neigh, contr, tot )
 end subroutine write_angle_tot_contr
 !*********************************************
 !*********************************************
+subroutine write_angle_neigh_sigma( filename, ext, N_neigh, mean, sigma )
+    implicit none
+    character(*), intent(in) :: filename
+    real*8, intent(in)       :: sigma(:), mean(:)
+    integer, intent(in)      :: N_neigh, ext
+    integer                  :: i
+
+    open(unit = 1, status = "replace", action = "write", file = filename)
+    do i = 1, N_neigh
+        write(1,"(i8,100f12.4)") i, sigma(i), mean(i)
+    enddo
+    close(unit = 1)
+
+end subroutine write_angle_neigh_sigma
+!*********************************************
+!*********************************************
 subroutine get_all_files (directory, N_file, file_list)
     character(*), intent(in)               :: directory
     character(*), allocatable, intent(out) :: file_list(:)
