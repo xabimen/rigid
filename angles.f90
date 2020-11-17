@@ -70,11 +70,11 @@ end subroutine get_neighbor_list
 
 
 ! Solo el numero de vecinos que hay hasta el primer minimo
-subroutine get_neighbor_list2( dist_matrix, dist_atoms, N_atoms, N_species, atomtype, &
+subroutine get_neighbor_list2( ext, dist_matrix, dist_atoms, N_atoms, N_species, atomtype, &
                                mat_neighbor,N_neighbor, neighbor_list )
     implicit none
     integer, intent(in)  :: N_atoms, N_species, dist_atoms(:,:), atomtype(:), &
-                            mat_neighbor(:,:)
+                            mat_neighbor(:,:), ext
     real*8, intent(in)   :: dist_matrix(:,:)
     integer, intent(out) :: N_neighbor(N_atoms, N_species)
     integer, allocatable, intent(out) :: neighbor_list(:,:,:,:)
@@ -97,7 +97,7 @@ subroutine get_neighbor_list2( dist_matrix, dist_atoms, N_atoms, N_species, atom
 
     enddo
     
-    size_neigh = maxval(N_neighbor)
+    size_neigh = maxval(N_neighbor)+ext
     allocate(neighbor_list(N_atoms, N_species, size_neigh,2))
 
     neighbor_list = aux_list(:,:,:size_neigh,:)
@@ -167,9 +167,9 @@ subroutine insert2(V_dist, W_list, N, x_d, y_n)
 end subroutine insert2
 
 
-subroutine find_pair_index( tag1, tag2, neighbor_order_list, N_neighbor, ind, ierr )
+subroutine find_pair_index( ext, tag1, tag2, neighbor_order_list, N_neighbor, ind, ierr )
     implicit none
-    integer, intent(in)  :: tag1, tag2, neighbor_order_list(:), N_neighbor
+    integer, intent(in)  :: ext, tag1, tag2, neighbor_order_list(:), N_neighbor
     integer, intent(out) :: ind, ierr
     integer :: i, j, ind1, ind2, found1, found2
 
@@ -177,7 +177,7 @@ subroutine find_pair_index( tag1, tag2, neighbor_order_list, N_neighbor, ind, ie
     found2 = 0
     ind1 = -1
     ind2 = -1
-    do i = 1, N_neighbor
+    do i = 1, N_neighbor + ext
 
         if (found1 == 1 .and. found2 == 1) then
             exit
@@ -254,8 +254,8 @@ subroutine update_angle_distr(ext, neighbor_order_list, atomtype, mat_neighbor, 
                     rk   = dist_matrix( neighbor_list(iat,iesp,n2,1), : )
 
                     ! Find index in the angle_distr corresponding to the pair (n1,n2)
-                    call find_pair_index( tag1, tag2, neighbor_order_list(iat,iesp,:), &
-                                          N_neigh+ext, ind, ierr )
+                    call find_pair_index( ext, tag1, tag2, neighbor_order_list(iat,iesp,:), &
+                                          N_neigh, ind, ierr )
 
                     ! if (ierr == -1) then
                     !     print*, iat, iesp 
@@ -344,6 +344,7 @@ subroutine total_adf( ext, angle_distr, mat_neighbor, neighbor_list, atomtype, n
     contribution_adf = 0.0d0
 
     allocate(cont(N_species, N_species, max_neigh))
+    cont = 0
 
     ! Loop in atoms
     do iat = 1, N_atoms
@@ -368,12 +369,6 @@ subroutine total_adf( ext, angle_distr, mat_neighbor, neighbor_list, atomtype, n
                     !endif
 
                 enddo
-
-                !if (atomtype(iat)==1 .and. iesp==2 .and. n1 == 1) then
-                ! if (sum(contribution_adf(iat,iesp,n1,:))< 1.0d0) then
-                !     print*, iat, sum(contribution_adf(iat,iesp,n1,:)),  maxval(contribution_adf(iat,iesp,n1,:)), &
-                !      minval(contribution_adf(iat,iesp,n1,:)),  cont(atomtype(iat),iesp,n1)
-                ! endif
 
             enddo
 

@@ -2,15 +2,15 @@ module pair_dist
 
 contains
 
-subroutine find_neigh_index( tag1, neighbor_order_list, N_neighbor, ind, ierr )
+subroutine find_neigh_index( ext, tag1, neighbor_order_list, N_neighbor, ind, ierr )
     implicit none
-    integer, intent(in)  :: tag1, neighbor_order_list(:), N_neighbor
+    integer, intent(in)  :: ext, tag1, neighbor_order_list(:), N_neighbor
     integer, intent(out) :: ind, ierr
     integer :: i, j, found1
 
     found1 = 0
     ind = -1
-    do i = 1, N_neighbor
+    do i = 1, N_neighbor + ext
 
         if (found1 == 1 ) then
             exit
@@ -73,7 +73,7 @@ subroutine update_dist_distr(ext, V, neighbor_order_list, atomtype, numIons, mat
                 tag1 = neighbor_list(iat,iesp,n1,2)
                 rj   = dist_matrix( neighbor_list(iat,iesp,n1,1), : )
 
-                call find_neigh_index( tag1, neighbor_order_list(iat,iesp,:), N_neigh+ext, ind, ierr )
+                call find_neigh_index( ext, tag1, neighbor_order_list(iat,iesp,:), N_neigh, ind, ierr )
 
                 if (ierr == 0) then
                     ! Update histogram
@@ -110,6 +110,9 @@ subroutine update_dist_distr(ext, V, neighbor_order_list, atomtype, numIons, mat
             enddo
 
         enddo
+
+        !if ( atomtype(iat) /= iesp ) print*, iat,iesp, sum(dist_distr(iat,iesp,:,:))
+        
 
     enddo
 
@@ -214,10 +217,12 @@ subroutine total_pdf( ext, rmax, dist_distr, mat_neighbor, neighbor_list, atomty
                 !      integratee(dist_distr(iat,iesp,n1,:),bins,numions(iesp)/1.0d0,rmax/real(bins)) 
 
                 do ihist = 1, bins
+                    
+                    if (dist_distr(iat,iesp,n1,ihist)<1.0d-8) cycle
 
                     contribution_pdf(atomtype(iat),iesp,n1,ihist) = contribution_pdf(atomtype(iat),iesp,n1,ihist) + &
-                                                                    dist_distr(iat,iesp,n1,ihist)/cont_pdf(iat,iesp,n1) / &
-                                                                    (mat_neighbor(atomtype(iat),iesp)+ext)
+                                                                    dist_distr(iat,iesp,n1,ihist)/cont_pdf(iat,iesp,n1)! / &
+                                                                    !(mat_neighbor(atomtype(iat),iesp)+ext)
                     tot_pdf(atomtype(iat),iesp,ihist) = tot_pdf(atomtype(iat),iesp,ihist) + &
                                                         dist_distr(iat,iesp,n1,ihist)!/mat_neighbor(atomtype(iat),iesp)
 
