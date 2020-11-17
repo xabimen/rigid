@@ -434,8 +434,8 @@ subroutine compute_number_constraints(max_sigma_angle)
             do i = 1, N_pair
                 if (sigma_angle(i) < max_sigma_angle) then
                     N_const_angle(atomtype(iat),iesp) = N_const_angle(atomtype(iat),iesp) + 1
-                !else
-                !    print*, iat, iesp, sigma_angle(i)
+                else
+                    print*, iat, iesp, sigma_angle(i)
                 endif
             enddo
 
@@ -447,11 +447,12 @@ subroutine compute_number_constraints(max_sigma_angle)
             if (iesp == jesp) cycle
             N_neigh = mat_neighbor(iesp,jesp)
             N_pair = N_neigh*(N_neigh-1)/2
-            print*, N_const_angle(iesp,jesp), real(numions(jesp),8), real(N_pair,8)
+            !print*, N_const_angle(iesp,jesp), real(numions(iesp),8), real(N_pair,8)
+            print*, N_const_angle(iesp,jesp) / real(numions(iesp),8) / real(N_pair,8)
         enddo
     enddo
 
-    print*, N_const_angle!, numions
+    !print*, N_const_angle!, numions
 
     close(unit = 1)
 
