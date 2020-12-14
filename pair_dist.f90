@@ -82,10 +82,10 @@ subroutine update_dist_distr(ext, V, neighbor_order_list, atomtype, numIons, mat
 
                     ihist = int(r/rcut*bins)
 
-                    norm = rcut/bins/( 4.0d0*pi * (rcut/bins)**3 * ( ihist**2 - ihist + 1.0d0/3 )  ) * &
-                               1.0!/(numIons(iesp)*numIons(atomtype(iat)))!*numions(iesp)
+                    !norm = rcut/bins/( 4.0d0*pi * (rcut/bins)**3 * ( ihist**2 - ihist + 1.0d0/3 )  ) * &
+                    !           1.0!/(numIons(iesp)*numIons(atomtype(iat)))!*numions(iesp)
 
-                    dist_distr(iat,iesp,ind,ihist) = dist_distr(iat,iesp,ind,ihist) + norm
+                    dist_distr(iat,iesp,ind,ihist) = dist_distr(iat,iesp,ind,ihist) + 1.0d0
 
 
                     ! do ihist=1, bins
@@ -117,17 +117,6 @@ subroutine update_dist_distr(ext, V, neighbor_order_list, atomtype, numIons, mat
     enddo
 
 
-! gdr(:)=gdr(:)/real(numIons(type1),8)
-! gdr2=0.0
-! do i = 2, bins
-!     !if (i==1) then
-!         !gdr2(i) = gdr(i)*rcut/real(bins,8)/(4.0*3.1416*((rcut/real(bins,8))**3*(i**3-(i-1)**3))/3.0d0)*V/(norm)
-!     !else
-!         gdr2(i) = ((gdr(i)+gdr(i-1))/2.0d0)*(rcut/real(bins,8))/ &
-!         (4.0*3.1416*((rcut/real(bins,8))**3*(i**3-(i-1)**3))/3.0d0)*V/(numIons(type2))
-!     !endif
-! enddo
-
 
 end subroutine update_dist_distr
 
@@ -144,36 +133,71 @@ pi = acos(-1.0d0)
 ans= 0.0
 
 do i = 2, min_index
-    ans = ans + dx*((pdf(i)+pdf(i-1))/2.0d0)*(4.0*pi*(dx*(i-0.5d0))**2)!*norm
+    ans = ans + dx*((pdf(i)+pdf(i-1))/2.0d0)*(4.0*pi*(dx*(i-0.5d0))**2)*norm
 enddo   
 end function
 
 
-subroutine apply_smearing_dist(histogram, rmax)
+subroutine apply_smearing_dist(histogram, rmax, N_file)
     implicit none
     real*8, intent(inout) :: histogram(:)
     real*8, intent(in)    :: rmax
+    integer, intent(in)   :: N_file
     integer :: bins, ihist, jhist
-    real*8  :: copy(size(histogram)), r, x, pi, c
+    real*8  :: copy(size(histogram)), r, x, pi, c, norm
 
     pi = acos(-1.0d0)
-    c  = 0.03d0
+    c  = 0.05d0
 
     bins = size(histogram)
     copy = 0.0d0
 
     do ihist = 1, bins
         if (histogram(ihist) < 1.0D-8) cycle
-        r = (rmax/bins)*(ihist+0.5d0)
+        r = (rmax/bins)*(ihist-0.5d0)
         do jhist = 1, bins
-            x = (rmax/bins)*jhist
+            x = (rmax/bins)*(jhist-0.5d0)
             copy(jhist) = copy(jhist) + histogram(ihist)*exp(-(x-r)**2/(2.0d0*c**2))/(c*sqrt(2.0d0*pi))
         enddo
     enddo 
 
-    histogram = copy
+    do ihist = 1, bins
+        if (copy(ihist) < 1.0D-8) cycle
+        histogram(ihist) = copy(ihist)/N_file
+    enddo 
+
+    !histogram = copy/N_file
+    
 
 end subroutine apply_smearing_dist
+
+
+subroutine normalize_gdr_dist(histogram, rmax, V_mean, numions_iesp, numions_atomtype_iat)
+    implicit none
+    real*8, intent(inout) :: histogram(:)
+    real*8, intent(in)    :: rmax, V_mean
+    integer, intent(in)   :: numions_iesp, numions_atomtype_iat
+    integer :: bins, ihist, jhist
+    real*8  :: r, x, pi, c, norm
+
+    pi = acos(-1.0d0)
+    c  = 0.05d0
+
+    bins = size(histogram)
+
+    do ihist = 1, bins
+        if (histogram(ihist) < 1.0D-8) then
+            cycle
+        endif
+        x = (rmax/bins)*ihist
+        norm = rmax/bins/( 4.0d0*pi * (rmax/bins)**3 * ( ihist**2 - ihist + 1.0d0/3 )  ) * &
+               V_mean/(numions_iesp*numions_atomtype_iat)
+
+        histogram(ihist) = histogram(ihist)*norm
+    enddo
+    
+
+end subroutine normalize_gdr_dist
 
 
 
@@ -183,10 +207,11 @@ end subroutine apply_smearing_dist
 !                     lenght(N_species,N_species,max_neigh,bins)
 ! total_pdf  :: total pdf for each pair of species
 !               lenght(N_species,N_species,bins)
-subroutine total_pdf( ext, rmax, dist_distr, mat_neighbor, neighbor_list, atomtype, numions, contribution_pdf, tot_pdf, cont_pdf)
+subroutine total_pdf( ext, V_mean, N_file, rmax, dist_distr, mat_neighbor, neighbor_list, &
+                      atomtype, numions, contribution_pdf, tot_pdf, cont_pdf)
     implicit none
-    real*8, intent(in)    :: rmax
-    integer, intent(in)   :: ext, neighbor_list(:,:,:,:), mat_neighbor(:,:), atomtype(:), numions(:), cont_pdf(:,:,:)
+    real*8, intent(in)    :: rmax, V_mean
+    integer, intent(in)   :: ext, N_file, neighbor_list(:,:,:,:), mat_neighbor(:,:), atomtype(:), numions(:), cont_pdf(:,:,:)
     real*8, intent(out)   :: tot_pdf(:,:,:), contribution_pdf(:,:,:,:)
     real*8, intent(inout) :: dist_distr(:,:,:,:)
     integer :: N_atoms, N_species, max_neigh, bins, iat, iesp, n1, ihist, jesp
@@ -211,17 +236,18 @@ subroutine total_pdf( ext, rmax, dist_distr, mat_neighbor, neighbor_list, atomty
 
             do n1 = 1, mat_neighbor(atomtype(iat),iesp) + ext
 
-                call apply_smearing_dist(dist_distr(iat,iesp,n1,:), rmax)
+                ! call apply_smearing_dist(dist_distr(iat,iesp,n1,:), rmax, V_mean, cont_pdf(iat,iesp,n1),&
+                !                          numions(iesp), numIons(atomtype(iat)))
 
                 !print*, iat, iesp, n1, &
-                !      integratee(dist_distr(iat,iesp,n1,:),bins,numions(iesp)/1.0d0,rmax/real(bins)) 
+                !      integratee(dist_distr(iat,iesp,n1,:),bins,numions(iesp)/V_mean,rmax/real(bins)) 
 
                 do ihist = 1, bins
                     
                     if (dist_distr(iat,iesp,n1,ihist)<1.0d-8) cycle
 
                     contribution_pdf(atomtype(iat),iesp,n1,ihist) = contribution_pdf(atomtype(iat),iesp,n1,ihist) + &
-                                                                    dist_distr(iat,iesp,n1,ihist)/cont_pdf(iat,iesp,n1)! / &
+                                                                    dist_distr(iat,iesp,n1,ihist)!/cont_pdf(iat,iesp,n1)! / &
                                                                     !(mat_neighbor(atomtype(iat),iesp)+ext)
                     tot_pdf(atomtype(iat),iesp,ihist) = tot_pdf(atomtype(iat),iesp,ihist) + &
                                                         dist_distr(iat,iesp,n1,ihist)!/mat_neighbor(atomtype(iat),iesp)
@@ -243,8 +269,9 @@ subroutine total_pdf( ext, rmax, dist_distr, mat_neighbor, neighbor_list, atomty
 
     !         do n1 = 1, mat_neighbor(atomtype(iat),iesp)
 
-    !             print*, iat, iesp, n1, &
-    !                  integratee(contribution_pdf(atomtype(iat),iesp,n1,:),bins,numions(iesp)/1.0d0,rmax/real(bins)) 
+
+    !             print*, iat, iesp, n1, cont_pdf(iat,iesp,n1), &
+    !                  integratee(contribution_pdf(atomtype(iat),iesp,n1,:),bins,numions(iesp)/V_mean,rmax/real(bins)) 
 
     !         enddo
 
@@ -253,58 +280,60 @@ subroutine total_pdf( ext, rmax, dist_distr, mat_neighbor, neighbor_list, atomty
 
     ! enddo
 
-    tot_pdf = sum(contribution_pdf,dim=3)
-    do iesp = 1, N_species
-        do jesp = 1, N_species
-            tot_pdf(iesp,jesp,:) = tot_pdf(iesp,jesp,:)!mat_neighbor(atomtype(iat),iesp)
-        enddo
-    enddo
+    ! tot_pdf = sum(contribution_pdf,dim=3)
+    ! do iesp = 1, N_species
+    !     do jesp = 1, N_species
+    !         tot_pdf(iesp,jesp,:) = tot_pdf(iesp,jesp,:)!mat_neighbor(atomtype(iat),iesp)
+    !     enddo
+    ! enddo
 
 
 end subroutine total_pdf
 
 
-subroutine get_mean_sigma_dist( N_pair, angle_distr, mean, sigma )
+subroutine get_mean_sigma_dist( N_pair, dist_distr, mean, sigma, rmax, norm, normalize )
     implicit none
     integer, intent(in)   :: N_pair
-    real*8, intent(inout) :: angle_distr(:,:)
+    real*8, intent(in)    :: rmax, norm
+    real*8, intent(inout) :: dist_distr(:,:)
     real*8, intent(out)   :: mean(:), sigma(:)
+    logical, intent(in)   :: normalize
     real*8, parameter     :: pi = acos(-1.0d0)
-    real*8                :: x, dx, norm
+    real*8                :: x, dx, aux
     integer               :: ipair, i, N   
 
-    N = size(angle_distr,2)
-    dx = pi/N
+    N = size(dist_distr,2)
+    dx = rmax/N
 
     mean = 0.0d0
     sigma = 0.0d0
 
 
     do ipair = 1, N_pair
-        norm = sum(angle_distr(ipair,:))*dx
 
-        do i = 1, N
-            if (angle_distr(ipair,i) > 1.0d-14) then
-                angle_distr(ipair,i) = angle_distr(ipair,i)/norm
-            endif
-        enddo 
-
+        if (normalize) then
+            aux = 0.0d0
+            do i = 1, N
+                x = (i-0.5)*dx
+                aux = aux+  dist_distr(ipair,i) * dx!*(4.0*pi*(dx*(i-0.5d0))**2)*norm  !norm = numions(iesp)/V_mean
+            enddo
+        else
+            aux = 1.0d0
+        endif
 
         do i = 1, N
             x = (i-0.5)*dx
-            mean(ipair) = mean(ipair) + x * angle_distr(ipair,i) * dx
+            mean(ipair) = mean(ipair) +  dist_distr(ipair,i) * x/aux * dx !*(4.0*pi*(dx*(i-0.5d0))**2)*norm  !norm = numions(iesp)/V_mean
         enddo
 
         do i = 1, N
             x = (i-0.5)*dx
-            sigma(ipair) = sigma(ipair) + ( x-mean(ipair) )**2 * angle_distr(ipair,i) * dx
+            sigma(ipair) = sigma(ipair) + ( x/aux-mean(ipair) )**2 * dist_distr(ipair,i) * dx !*(4.0*pi*(dx*(i-0.5d0))**2)*norm 
         enddo
+        sigma = sqrt(sigma)
 
     enddo
 
-
-    mean = mean*180/pi
-    sigma = sqrt(sigma)*180/pi
 
 
 end subroutine get_mean_sigma_dist
@@ -324,11 +353,12 @@ real*8, dimension(bins), intent(out)    :: gdr2
 real*8, dimension(bins)                 :: gdr
 integer                                 :: i, j, k
 integer                                 :: len
-real*8                                  :: x, c, r
+real*8                                  :: x, c, r, pi
 
 
 c=0.05d0
 gdr=0.0d0
+pi=acos(-1.0d0)
 len = size(dist_matrix,1)
 k=0
 do i = 1, len
@@ -338,7 +368,7 @@ do i = 1, len
             k=k+1
             do j=1, bins
                 x=rcut/real(bins,8)*j
-                gdr(j)=gdr(j)+exp(-(x-r)**2/(2.0d0*c**2))/(c*sqrt(2.0d0*3.1416))
+                gdr(j)=gdr(j)+exp(-(x-r)**2/(2.0d0*c**2))/(c*sqrt(2.0d0*pi))
             enddo
         endif
     endif
@@ -353,7 +383,7 @@ do i = 2, bins
         !gdr2(i) = gdr(i)*rcut/real(bins,8)/(4.0*3.1416*((rcut/real(bins,8))**3*(i**3-(i-1)**3))/3.0d0)*V/(norm)
     !else
         gdr2(i) = ((gdr(i)+gdr(i-1))/2.0d0)*(rcut/real(bins,8))/ &
-        (4.0*3.1416*((rcut/real(bins,8))**3*(i**3-(i-1)**3))/3.0d0)*V/(numIons(type2))
+        (4.0*pi*((rcut/real(bins,8))**3*(i**3-(i-1)**3))/3.0d0)*1/(numIons(type2))   ! iria V en lugar del 1
     !endif
 enddo
 

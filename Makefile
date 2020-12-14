@@ -9,6 +9,9 @@ main : angles.f90 check_min.f90 io.f90 pair_dist.f90 read_write.f90 main_full_tr
 
 main_lammps : angles.f90 check_min.f90 io.f90 pair_dist.f90 read_write.f90 main_lammps.f90
 	$(CC) angles.f90 check_min.f90 io.f90 pair_dist.f90 read_write.f90 main_lammps.f90 -o main
+
+analize : analize_constraints.f90
+	$(CC) analize_constraints.f90 -o analize
 	
 debug : angles.f90 check_min.f90 io.f90 pair_dist.f90 read_write.f90 main_lammps.f90
 	$(CCDEBUG) angles.f90 check_min.f90 io.f90 pair_dist.f90 read_write.f90 main_lammps.f90 -o main

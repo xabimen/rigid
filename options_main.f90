@@ -7,36 +7,40 @@ use mod_check_min
 
 contains
 
-subroutine get_mat_rcut_neighbor(inunit, outunit, natoms, N_species, bins, Rmax, N_file, mat_neighbor, mat_rcut)
+subroutine get_mat_rcut_neighbor(inunit, outunit, natoms, N_species, bins, Rmax, N_file, mat_neighbor, mat_rcut, mat_pdf)
     implicit none
     integer, intent(in)    :: inunit, outunit, natoms, N_species, bins
     real*8, intent(in)     :: Rmax
     real*8, intent(inout)  :: mat_rcut(:,:)
     integer, intent(inout) ::mat_neighbor(:,:)
     integer, intent(out)   :: N_file
+    real*8, intent(out)    :: mat_pdf(:,:,:)
 
     real*8, allocatable  :: dist_matrix(:,:)
     integer, allocatable :: dist_atoms(:,:), N(:)
 
     integer :: numIons(N_species), atomtype(natoms)
-    real*8  :: mat_pdf(N_species,N_species,bins), pdf(bins), &
+    real*8  :: pdf(bins), &
                cell(3,3), coor(natoms,3)
-    real*8  :: V, aux
+    real*8  :: V, aux, V_mean
     integer :: io, type1, type2, min_pdf
     character(4) :: caux1, caux2
 
     write(outunit,*) "1. READ TRAJECTORY AND COMPUTE RADIAL DISTRIBUTION FUNCTIONS"
 
     N_file = 0
+    V_mean = 0
+    mat_pdf = 0.0d0
     do
         call read_trj(inunit,cell,coor,numIons,atomtype,io)
         if (io < 0) exit
-        if(N_file == 10) exit
+        !if(N_file == 11) exit
 
         N_file = N_file + 1
         write(outunit,*) "READING FILE ", N_file
 
         call makeMatrices(cell,coor,numIons,atomType,Rmax,N,V,dist_matrix,dist_atoms)
+        V_mean = V_mean + V
 
         do type1 = 1, N_species
 
@@ -58,7 +62,7 @@ subroutine get_mat_rcut_neighbor(inunit, outunit, natoms, N_species, bins, Rmax,
     do type1 = 1, N_species
         do type2 = 1, N_species
             if (type1==type2) cycle
-            mat_pdf(type1,type2,:) = mat_pdf(type1,type2,:)/real(N_file,8)
+            mat_pdf(type1,type2,:) = mat_pdf(type1,type2,:)/real(N_file,8)*V_mean/N_file
         enddo
     enddo
     rewind(unit=inunit)
@@ -85,8 +89,14 @@ subroutine get_mat_rcut_neighbor(inunit, outunit, natoms, N_species, bins, Rmax,
             aux = integrate(mat_pdf(type1,type2,:),min_pdf,numions(type2)/V,rmax/real(bins))
             mat_neighbor(type1,type2) = nint(aux)
             write(outunit,"(2i5,2f10.6)") type1, type2, mat_rcut(type1,type2), aux
+
+            call N_neighbor_distance("num_neigh_dist"//trim(adjustl(caux1))//trim(adjustl(caux2))//".dat", &
+                                     mat_pdf(type1,type2,:), numions(type2)/V, rmax)
+
         enddo
     enddo 
+
+
 
 end subroutine get_mat_rcut_neighbor
 
@@ -178,6 +188,7 @@ subroutine get_neighbor_tags(inunit, outunit, natoms, N_species, bins, ext, rmax
     cont_adf = 0
     contribution_pdf = 0.0d0
     contribution_adf = 0.0d0
+    rewind(unit = inunit)
 
 end subroutine get_neighbor_tags
 
@@ -185,12 +196,13 @@ end subroutine get_neighbor_tags
 
 subroutine get_distributions_dist_angles(inunit, outunit, N_file, natoms, N_species, bins, ext, rmax, mat_neighbor, &
                                          neighbor_order_list, mat_pdf, tot_pdf, contribution_pdf, cont_pdf, &
-                                         mat_adf, tot_adf, contribution_adf, cont_adf )
+                                         mat_adf, tot_adf, contribution_adf, cont_adf, V_mean )
     integer, intent(in)    :: inunit, outunit, natoms, N_species, bins, ext, N_file, mat_neighbor(:,:)
     real*8, intent(in)     :: rmax
     real*8, intent(inout)  :: mat_pdf(:,:,:,:), tot_pdf(:,:,:), contribution_pdf(:,:,:,:), &
                               mat_adf(:,:,:,:), tot_adf(:,:,:), contribution_adf(:,:,:,:)
     integer, intent(inout) :: neighbor_order_list(:,:,:), cont_pdf(:,:,:), cont_adf(:,:,:)
+    real*8, intent(out)    :: V_mean
 
     real*8, allocatable  :: dist_matrix(:,:)
     integer, allocatable :: dist_atoms(:,:), N(:), neighbor_list(:,:,:,:)
@@ -199,20 +211,23 @@ subroutine get_distributions_dist_angles(inunit, outunit, N_file, natoms, N_spec
     real*8  :: cell(3,3), coor(natoms,3)
     real*8  :: V
 
-    integer :: ifile
+    integer :: ifile, iat, iesp, N_neigh, N_pair
 
 
     write(outunit,*)  "4. READ TRAJECTORY AND COMPUTE THE DISTRIBUTION OF EACH ANGLE AND EACH BOND"
-    rewind(unit = inunit)
+    V_mean = 0.0d0
     do ifile = 1, N_file
         call read_trj(inunit,cell,coor,numIons,atomtype,io)
         if (io < 0) exit
 
-        if(ifile == 10) exit
+        !if(ifile == 10) exit
 
         call makeMatrices(cell,coor,numIons,atomType,Rmax,N,V,dist_matrix,dist_atoms)
         call get_neighbor_list2( ext, dist_matrix, dist_atoms, natoms, N_species, atomtype, &
                                  mat_neighbor, N_neighbor, neighbor_list )
+
+
+        V_mean = V_mean + V/N_file
 
 
         call update_angle_distr ( ext, neighbor_order_list, atomtype, mat_neighbor, dist_matrix, &
@@ -224,15 +239,42 @@ subroutine get_distributions_dist_angles(inunit, outunit, N_file, natoms, N_spec
         deallocate( dist_matrix, dist_atoms, neighbor_list )
 
     enddo
+
     close(unit = inunit)
+
+
+    ! Normilize and apply smearing
+    do iat = 1, natoms
+
+        ! Loop in species
+        do iesp = 1, N_species 
+
+            if ( atomtype(iat) == iesp ) cycle
+
+            N_neigh = mat_neighbor(atomtype(iat),iesp) 
+            N_pair = N_neigh*(N_neigh-1)/2
+
+            do n1 = 1, N_neigh + ext
+                call apply_smearing_dist(mat_pdf(iat,iesp,n1,:), rmax, cont_pdf(iat,iesp,n1))
+                !call normalize_gdr_dist(mat_pdf(iat,iesp,n1,:), rmax, V_mean,numions(iesp), numIons(atomtype(iat)))
+            enddo
+
+            do n1 = 1, N_pair !+ ext
+                call apply_smearing_ang(mat_adf(iat,iesp,n1,:))
+            enddo
+
+        enddo
+    enddo
+
 end subroutine get_distributions_dist_angles
 
 
 
-subroutine get_deviation_each_dist_angle(outunit, natoms, N_species, atomtype, ext, mat_neighbor, &
+subroutine get_deviation_each_dist_angle(outunit, natoms, N_species, atomtype, numions, rmax, V_mean, ext, mat_neighbor, &
                                          mat_pdf, mat_adf, sigma_pdf, sigma_adf)
     implicit none
-    integer, intent(in)              :: outunit, natoms, N_species, atomtype(:), ext, mat_neighbor(:,:)
+    integer, intent(in)              :: outunit, natoms, N_species, atomtype(:), numions(:), ext, mat_neighbor(:,:)
+    real*8, intent(in)               :: rmax, V_mean
     real*8, intent(inout)            :: mat_adf(:,:,:,:), mat_pdf(:,:,:,:)
     real*8, intent(out), allocatable :: sigma_pdf(:,:,:), sigma_adf(:,:,:)
 
@@ -265,12 +307,17 @@ subroutine get_deviation_each_dist_angle(outunit, natoms, N_species, atomtype, e
             if ( atomtype(iat) == iesp ) cycle
 
             ! N_pair + ext
-            call get_mean_sigma_angle( N_pair, mat_adf(iat,iesp,:,:), mean_adf(iat,iesp,:), sigma_adf(iat,iesp,:), .true. )
+            call get_mean_sigma_angle( N_pair, mat_adf(iat,iesp,:,:), mean_adf(iat,iesp,:), sigma_adf(iat,iesp,:))
+            call get_mean_sigma_dist( N_neigh, mat_pdf(iat,iesp,:,:), mean_pdf(iat,iesp,:), sigma_pdf(iat,iesp,:), &
+                                      rmax, numions(iesp)/V_mean, .true. )
 
             !if (atomType(iat)==2 .and. iesp==1) cycle
 
             write(1,"(2i5,100f10.3)") iat,iesp, mean_adf(iat,iesp,:N_pair)
             write(1,"(2i5,100f10.3)") iat,iesp, sigma_adf(iat,iesp,:N_pair)
+
+            write(1,"(2i5,100f10.3)") iat,iesp, mean_pdf(iat,iesp,:N_neigh)
+            write(1,"(2i5,100f10.3)") iat,iesp, sigma_pdf(iat,iesp,:N_neigh)
             write(1,*)
 
             write(caux1,"(i0)") iat
@@ -288,11 +335,85 @@ end subroutine get_deviation_each_dist_angle
 
 
 
-subroutine write_plot_contribution_total (outunit, N_species, mat_neighbor, ext, rmax, plot_results, &
+subroutine get_deviation_contribution(outunit, natoms, N_species, numions, rmax, V_mean, ext, mat_neighbor, &
+                                      contribution_pdf, contribution_adf)
+    implicit none
+    integer, intent(in)   :: outunit, N_species, natoms, numions(:), ext, mat_neighbor(:,:)
+    real*8, intent(in)    :: rmax, V_mean
+    real*8, intent(inout) :: contribution_pdf(:,:,:,:), contribution_adf(:,:,:,:)
+    real*8, allocatable   :: mean_adf(:,:,:), sigma_adf(:,:,:), mean_pdf(:,:,:), sigma_pdf(:,:,:)
+    integer :: type1, type2, max_neigh, max_pair, N_pair, N_neigh, n1
+    character(17) :: datafile
+    character(4)  :: caux1, caux2
+
+
+    max_neigh = size(contribution_pdf,3)
+    max_pair  = size(contribution_adf,3)
+
+    allocate( mean_adf(natoms,N_species,max_pair), sigma_adf(natoms,N_species,max_pair), &
+              mean_pdf(natoms,N_species,max_neigh), sigma_pdf(natoms,N_species,max_neigh) )
+
+    do type1 = 1, N_species
+        do type2 = 1, N_species
+            if (type1 == type2) cycle
+            write(caux1,"(i1)") type1
+            write(caux2,"(i1)") type2
+
+            N_neigh = mat_neighbor(type1,type2)
+            N_pair = N_neigh*(N_neigh-1)/2
+
+            call get_mean_sigma_angle( N_pair, contribution_adf(type1,type2,:,:), mean_adf(type1,type2,:), &
+                                       sigma_adf(type1,type2,:))
+
+            call get_mean_sigma_dist( N_neigh, contribution_pdf(type1,type2,:,:), mean_pdf(type1,type2,:), &   
+                                      sigma_pdf(type1,type2,:), rmax, numions(type2)/V_mean, .true. )
+
+
+            datafile = "sigma_angle"//trim(adjustl(caux1))//trim(adjustl(caux2))//".dat"
+            call write_neigh_sigma( datafile, ext, N_pair, mean_adf(type1,type2,:N_pair), &
+                                    sigma_adf(type1,type2,:N_pair), .false. )
+
+
+            datafile = "sigma_dista"//trim(adjustl(caux1))//trim(adjustl(caux2))//".dat"
+            ! Rescale sigma --> sigma/mean
+            ! do n1 = 1, N_neigh
+            !     sigma_pdf(type1,type2,n1) = sigma_pdf(type1,type2,n1)/mean_pdf(type1,type2,n1) 
+            ! enddo
+            call write_neigh_sigma( datafile, ext, N_neigh-1, mean_pdf(type1,type2,:N_neigh), &
+                                    sigma_pdf(type1,type2,:N_pair), .true. )
+
+        enddo
+    enddo
+end subroutine
+
+
+subroutine dist_distr2pdf(ext, natoms, N_species, mat_neighbor, rmax, V_mean, numions, atomtype, contribution_pdf, tot_pdf)
+    implicit none
+    integer, intent(in)   :: ext, natoms, N_species, mat_neighbor(:,:), numions(:), atomtype(:)
+    real*8, intent(in)    :: rmax, V_mean
+    real*8, intent(inout) :: tot_pdf(:,:,:), contribution_pdf(:,:,:,:)
+    integer :: type1, type2, n1, N_neigh
+
+    do type1 = 1, N_species
+        do type2 = 1, N_species
+            if (type1 == type2) cycle
+            N_neigh = mat_neighbor(type1,type2)
+            do n1 = 1, N_neigh + ext
+                call normalize_gdr_dist(contribution_pdf(type1,type2,n1,:), rmax, V_mean,numions(type1), numIons(type2))
+            enddo
+            call normalize_gdr_dist(tot_pdf(type1,type2,:), rmax, V_mean,numions(type1), numIons(type2))
+        enddo   
+    enddo
+
+end subroutine dist_distr2pdf
+
+
+
+subroutine write_plot_contribution_total (outunit, N_species, mat_neighbor, ext, rmax, V_mean, numions, plot_results, &
                                           contribution_pdf, tot_pdf, contribution_adf, tot_adf)
     implicit none
-    integer, intent(in) :: outunit, N_species, ext, mat_neighbor(:,:)
-    real*8, intent(in)  :: rmax
+    integer, intent(in) :: outunit, N_species, ext, mat_neighbor(:,:), numions(:)
+    real*8, intent(in)  :: rmax, V_mean
     real*8, intent(inout)  :: tot_pdf(:,:,:), contribution_pdf(:,:,:,:), &
                            tot_adf(:,:,:), contribution_adf(:,:,:,:)
     logical, intent(in) :: plot_results
@@ -319,7 +440,7 @@ subroutine write_plot_contribution_total (outunit, N_species, mat_neighbor, ext,
             write(caux2,"(i1)") type2
             
 
-            ! DISTANCES
+            ! DISTANCES: DISTRIBUTIONS
             !-------------------------------------------------------------------------------
             datafile = "contr_tot_gdr"//trim(adjustl(caux1))//trim(adjustl(caux2))//".dat"
             call write_gdr_tot_contr( datafile, &
@@ -332,6 +453,7 @@ subroutine write_plot_contribution_total (outunit, N_species, mat_neighbor, ext,
                               trim(adjustl(caux3))//'"'//" plot_contr_pdf.gnuplot"
 
 
+            ! Gnuplot
             if (plot_results) then
                 call system( "gnuplot -e "//'"'//"datafile='"//datafile//"'; outfile='"//&
                               "fig_pdf"//trim(adjustl(caux1))//trim(adjustl(caux2))//".pdf'; nneigh="//&
@@ -340,8 +462,29 @@ subroutine write_plot_contribution_total (outunit, N_species, mat_neighbor, ext,
             !-------------------------------------------------------------------------------
 
 
+            ! DISTANCES: SIGMA
+            !-------------------------------------------------------------------------------
+            N_pair = mat_neighbor(type1,type2)!+ext
+            datafile2 = "sigma_dista"//trim(adjustl(caux1))//trim(adjustl(caux2))//".dat"
+            write(unit = 11,fmt=*) "gnuplot -e "//'"'//"datafile='"//datafile2//"'; outfile='"//&
+                              "fig_sigma_distance"//trim(adjustl(caux1))//trim(adjustl(caux2))//".pdf'; nneigh="//&
+                              trim(adjustl(caux3))//'"'//" plot_sigma_neigh.gnuplot"
+
+            if (plot_results) then
+                call system( "gnuplot -e "//'"'//"datafile='"//datafile2//"'; outfile='"//&
+                              "fig_sigma_distance"//trim(adjustl(caux1))//trim(adjustl(caux2))//".pdf'; nneigh="//&
+                              trim(adjustl(caux3))//'"'//" plot_sigma_neigh.gnuplot" )
+            endif
+
+
+            ! write(*,"(2i5,100f10.3)") type1, type2, mean(type1,type2,:N_pair)
+            ! write(*,"(2i5,100f10.3)") type1, type2, sigma(type1,type2,:N_pair)
+            ! write(*,*)
+            !-------------------------------------------------------------------------------
+
+
             
-            ! ANGLES
+            ! ANGLES: DISTRIBUTIONS
             !-------------------------------------------------------------------------------
             datafile = "contr_tot_adf"//trim(adjustl(caux1))//trim(adjustl(caux2))//".dat"
             call write_angle_tot_contr( datafile, ext, &
@@ -353,8 +496,6 @@ subroutine write_plot_contribution_total (outunit, N_species, mat_neighbor, ext,
                               "fig_adf"//trim(adjustl(caux1))//trim(adjustl(caux2))//".pdf'; nneigh="//&
                               trim(adjustl(caux3))//'"'//" plot_contr_adf.gnuplot"
 
-
-            ! Gnuplot
             if (plot_results) then
                 call system( "gnuplot -e "//'"'//"datafile='"//datafile//"'; outfile='"//&
                               "fig_adf"//trim(adjustl(caux1))//trim(adjustl(caux2))//".pdf'; nneigh="//&
@@ -362,12 +503,11 @@ subroutine write_plot_contribution_total (outunit, N_species, mat_neighbor, ext,
             endif
 
 
+            ! ANGLES: SIGMA
+            !-------------------------------------------------------------------------------
             N_pair = mat_neighbor(type1,type2)*(mat_neighbor(type1,type2)-1)/2!+ext
-            call get_mean_sigma_angle( N_pair, contribution_adf(type1,type2,:N_pair,:), &
-                                       mean(type1,type2,:), sigma(type1,type2,:), .false. )
 
             datafile2 = "sigma_angle"//trim(adjustl(caux1))//trim(adjustl(caux2))//".dat"
-            call write_angle_neigh_sigma( datafile2, ext, N_pair, mean(type1,type2,:N_pair), sigma(type1,type2,:N_pair) )
 
             write(unit = 11,fmt=*) "gnuplot -e "//'"'//"datafile='"//datafile2//"'; outfile='"//&
                               "fig_sigma_angle"//trim(adjustl(caux1))//trim(adjustl(caux2))//".pdf'; nneigh="//&

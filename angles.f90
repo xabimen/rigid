@@ -296,11 +296,11 @@ end subroutine update_angle_distr
 subroutine apply_smearing_ang(histogram)
     implicit none
     real*8, intent(inout) :: histogram(:)
-    integer :: bins, ihist, jhist
-    real*8  :: copy(size(histogram)), theta, x, pi, c
+    integer :: bins, ihist, jhist, N, i
+    real*8  :: copy(size(histogram)), theta, x, pi, c, dx, norm
 
     pi = acos(-1.0d0)
-    c  = 0.03d0
+    c  = 0.05d0
 
     bins = size(histogram)
     copy = 0.0d0
@@ -314,7 +314,16 @@ subroutine apply_smearing_ang(histogram)
         enddo
     enddo 
 
-    histogram = copy
+    dx = pi/bins
+    norm = sum(copy)*dx
+    do i = 1, bins
+        if (copy(i) > 1.0d-14) then
+            histogram(i) = copy(i)/norm
+        else
+            histogram(i) = copy(i)
+        endif
+    enddo 
+
 
 end subroutine apply_smearing_ang
 
@@ -394,10 +403,9 @@ end subroutine total_adf
 
 
 
-subroutine get_mean_sigma_angle( N_pair, angle_distr, mean, sigma, normalize )
+subroutine get_mean_sigma_angle( N_pair, angle_distr, mean, sigma )
     implicit none
     integer, intent(in)   :: N_pair
-    logical, intent(in)   :: normalize
     real*8, intent(inout) :: angle_distr(:,:)
     real*8, intent(out)   :: mean(:), sigma(:)
     real*8, parameter     :: pi = acos(-1.0d0)
@@ -412,17 +420,6 @@ subroutine get_mean_sigma_angle( N_pair, angle_distr, mean, sigma, normalize )
 
 
     do ipair = 1, N_pair
-        
-
-        if (normalize) then
-            call apply_smearing_ang(angle_distr(ipair,:))
-            norm = sum(angle_distr(ipair,:))*dx
-            do i = 1, N
-                if (angle_distr(ipair,i) > 1.0d-14) then
-                    angle_distr(ipair,i) = angle_distr(ipair,i)/norm
-                endif
-            enddo 
-        endif
 
         do i = 1, N
             x = (i-0.5)*dx

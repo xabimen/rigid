@@ -18,7 +18,7 @@ integer, allocatable                 :: neighbor_list(:,:,:,:), N_neighbor(:,:),
                                         cont_pdf(:,:,:), cont_adf(:,:,:), &
                                         mat_neighbor(:,:), mat_pairs(:,:)
 real*8, allocatable                  :: mat_rcut(:,:), mat_pdf(:,:,:,:), mat_adf(:,:,:,:), &
-                                        tot_pdf(:,:,:), &
+                                        tot_pdf(:,:,:), tot_pdf_compute_neigh(:,:,:), &
                                         contribution_pdf(:,:,:,:), contribution_adf(:,:,:,:), tot_adf(:,:,:), &
                                         mean_pdf(:,:,:), sigma_pdf(:,:,:), mean_adf(:,:,:), sigma_adf(:,:,:)
 
@@ -66,15 +66,18 @@ if (.not. check_constraints) then
     open(unit=inunit,file=trjfile,status='old',action='read')
     open(unit=outunit,file="output",status='replace',action='write')
 
+    !print*, "0"
 
     if (compute_first_neighbor) then
         mat_neighbor = 0
         mat_rcut = 0.0
-        call get_mat_rcut_neighbor(inunit, outunit, natoms, N_species, bins, Rmax, N_file, mat_neighbor, mat_rcut)
+        allocate(tot_pdf_compute_neigh(N_species,N_species,bins))
+        call get_mat_rcut_neighbor(inunit, outunit, natoms, N_species, bins, Rmax, &
+                                    N_file, mat_neighbor, mat_rcut, tot_pdf_compute_neigh)
     else
         call get_N_file(inunit, outunit, natoms, N_file)
         mat_neighbor = 6
-        mat_pairs = 15
+        !mat_pairs = 15
     endif
 
     !print*, "1"
@@ -102,7 +105,7 @@ if (.not. check_constraints) then
 
     call get_distributions_dist_angles ( inunit, outunit, N_file, natoms, N_species, bins, ext, rmax, mat_neighbor, &
                                          neighbor_order_list, mat_pdf, tot_pdf, contribution_pdf, cont_pdf, &
-                                         mat_adf, tot_adf, contribution_adf, cont_adf )
+                                         mat_adf, tot_adf, contribution_adf, cont_adf, V_mean )
     ! ------------------------------------------------------------
 
     !print*, "3"
@@ -114,8 +117,8 @@ if (.not. check_constraints) then
     ! ------------------------------------------------------------
 
     if (compute_deviations) then
-        call get_deviation_each_dist_angle(outunit, natoms, N_species, atomtype, ext, mat_neighbor, &
-                                           mat_pdf, mat_adf, sigma_pdf, sigma_adf)
+        call get_deviation_each_dist_angle(outunit, natoms, N_species, atomtype, numions, rmax, V_mean, ext, mat_neighbor, &
+                                         mat_pdf, mat_adf, sigma_pdf, sigma_adf)
     endif
 
     ! ------------------------------------------------------------
@@ -124,12 +127,27 @@ if (.not. check_constraints) then
     !print*, "4"
 
 
-    call total_pdf(ext, rmax, mat_pdf, mat_neighbor, neighbor_list, atomtype, numIons, contribution_pdf, tot_pdf, cont_pdf)
+  
+    call total_pdf(ext, V_mean, N_file, rmax, mat_pdf, mat_neighbor, neighbor_list, &
+                    atomtype, numIons, contribution_pdf, tot_pdf, cont_pdf)
+
     call total_adf(ext, mat_adf, mat_neighbor, neighbor_list, atomtype, numIons, contribution_adf, tot_adf, cont_adf)
 
-    call write_plot_contribution_total(outunit, N_species, mat_neighbor, ext, rmax, plot_results, &
-                                              contribution_pdf, tot_pdf, contribution_adf, tot_adf)
 
+    call get_deviation_contribution(outunit, natoms, N_species, numions, rmax, V_mean, ext, mat_neighbor, &
+                                      contribution_pdf, contribution_adf)
+
+
+    call dist_distr2pdf(ext, natoms, N_species, mat_neighbor, rmax, V_mean, numions, atomtype, contribution_pdf, tot_pdf)
+
+
+    if (compute_first_neighbor) then
+        call write_plot_contribution_total(outunit, N_species, mat_neighbor, ext, rmax, V_mean, numions, plot_results, &
+                                              contribution_pdf, tot_pdf_compute_neigh, contribution_adf, tot_adf)
+    else
+        call write_plot_contribution_total(outunit, N_species, mat_neighbor, ext, rmax, V_mean, numions, plot_results, &
+                                              contribution_pdf, tot_pdf, contribution_adf, tot_adf)
+    endif
 
     close(unit=outunit)
 else

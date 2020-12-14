@@ -1,9 +1,9 @@
-qe1.lammpstrj			! Lammps trajectory
+qe2.lammpstrj			! Lammps trajectory
 2						! Number of species in the system
 Si O 					! Species in the system
-4.0						! Maximum radius for the radial distribution function
+5.0						! Maximum radius for the radial distribution function
 400						! Number of bins for the histograms										! 200
-0						! ext: number of extra atoms cosidered apart from the first neighbors 	!2
+2						! ext: number of extra atoms cosidered apart from the first neighbors 	!2
 
 .false.					! compute_first_neighbors
 .true.					! plot_results	 
