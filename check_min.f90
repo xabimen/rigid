@@ -20,6 +20,25 @@ enddo
 end function
 
 
+subroutine N_neighbor_distance(outfile, pdf, norm, rmax)
+    implicit none
+    character(*), intent(in) :: outfile
+    real*8, intent(in)       :: pdf(:), norm, rmax
+    real*8  :: dx
+    integer :: i, bins
+
+    bins = size(pdf)
+    dx = rmax/bins
+
+    open(unit = 1, action = "write", status="replace", file = outfile)
+    do i = 1, bins
+        write(1,"(2f12.6)") (i-0.5)*dx, integrate(pdf,i,norm,dx)
+    enddo
+    close(unit=1)
+
+end subroutine N_neighbor_distance
+
+
 subroutine check_min ( mat, i_init, min_index )
     implicit none
     real*8, intent(in)   :: mat(:)
